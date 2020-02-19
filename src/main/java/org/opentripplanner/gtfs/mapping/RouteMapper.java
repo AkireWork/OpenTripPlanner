@@ -15,7 +15,7 @@ class RouteMapper {
 
     private final Map<org.onebusaway.gtfs.model.Route, Route> mappedRoutes = new HashMap<>();
 
-    private static final CompetentAuthorityTable COMPETENT_AUTHORITY_TABLE = new CompetentAuthorityTable("src/main/resources/org/opentripplanner/competent_authority.txt");
+    private static final CompetentAuthorityTable COMPETENT_AUTHORITY_TABLE = new CompetentAuthorityTable();
 
     RouteMapper(AgencyMapper agencyMapper) {
         this.agencyMapper = agencyMapper;

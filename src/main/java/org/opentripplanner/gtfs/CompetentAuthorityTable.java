@@ -4,8 +4,6 @@ import com.google.common.collect.Maps;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.InputStream;
 import java.util.Map;
 import java.util.Scanner;
@@ -15,20 +13,16 @@ public class CompetentAuthorityTable {
 
     private Map<String, String> authorities = Maps.newHashMap();
 
-    public CompetentAuthorityTable (String name) {
-        //InputStream is = CompetentAuthorityTable.class.getClassLoader().getResourceAsStream(name);
+    public CompetentAuthorityTable () {
+        String fileLocation = "/org/opentripplanner/competent_authority.txt";
+        InputStream inputStream = getClass().getResourceAsStream(fileLocation);
 
-        File file = new File(name);
-
-        try (Scanner scanner = new Scanner(file)) {
+        try (Scanner scanner = new Scanner(inputStream)) {
             while (scanner.hasNextLine()) {
                 final String line = scanner.nextLine();
                 final String[] parts = line.split("\\s*,\\s*");
                 authorities.put(parts[0], parts[1]);
             }
-        } catch (FileNotFoundException e) {
-            LOG.error("File not found: " + name);
-            e.printStackTrace();
         }
 
     }
