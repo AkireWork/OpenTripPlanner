@@ -3005,6 +3005,11 @@ public class IndexGraphQLSchema {
                                 .description("Only include routes, which use one of these modes")
                                 .type(GraphQLList.list(modeEnum))
                                 .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("competentAuthority")
+                                .description("Query routes by competentAuthority")
+                                .type(Scalars.GraphQLString)
+                                .build())
                         .dataFetcher(environment -> {
                             if ((environment.getArgument("ids") instanceof List)) {
                                 if (environment.getArguments().entrySet()
