@@ -2474,7 +2474,7 @@ public class IndexGraphQLSchema {
                         .name("zones")
                         .description("List of zones where this ticket is valid.\n  Corresponds to field `zoneId` in **Stop** type.")
                         .type(GraphQLList.list(GraphQLNonNull.nonNull(Scalars.GraphQLString)))
-                        .dataFetcher(environment -> ((TicketType)environment.getSource()).getZones())
+                        .dataFetcher(environment -> ((TicketType) environment.getSource()).getZones())
                         .build())
                 .build();
 
@@ -3047,6 +3047,27 @@ public class IndexGraphQLSchema {
                                 List<TraverseMode> modes = environment.getArgument("transportModes");
                                 stream = stream.filter(route -> modes.contains(GtfsLibrary.getTraverseMode(route)));
                             }
+                            if ((environment.getArgument("competentAuthority") instanceof List)) {
+                                if (environment.getArguments().entrySet()
+                                        .stream()
+                                        .filter(stringObjectEntry -> stringObjectEntry.getValue() != null)
+                                        .collect(Collectors.toList())
+                                        .size() != 1) {
+                                    throw new IllegalArgumentException("Unable to combine other filters with ids");
+                                }
+                                return index.routeForId.values().stream()
+                                        .filter(route -> route.getCompetentAuthority() != null)
+                                        .filter(route -> ((List<String>) environment.getArgument("competentAuthority"))
+                                                .contains(route.getCompetentAuthority())
+                                        )
+                                        .collect(Collectors.toList());
+                            } else if (environment.getArgument("competentAuthority") != null) {
+                                stream = stream
+                                        .filter(route -> route.getCompetentAuthority() != null)
+                                        .filter(route -> route.getCompetentAuthority().toLowerCase().startsWith(
+                                                ((String) environment.getArgument("competentAuthority")).toLowerCase())
+                                        );
+                            }
 
                             return stream.collect(Collectors.toList());
                         })
@@ -3232,8 +3253,7 @@ public class IndexGraphQLSchema {
                             if (minDate != null && maxDate != null) {
                                 if (minDate.compareTo(maxDate) > 0) {
                                     throw new IllegalArgumentException("minDate cannot be greater than maxDate.");
-                                }
-                                else if (minDate.compareTo(maxDate) == 0) {
+                                } else if (minDate.compareTo(maxDate) == 0) {
                                     if (minDepartureTime != null && maxDepartureTime != null && minDepartureTime > maxDepartureTime) {
                                         throw new IllegalArgumentException("minDepartureTime cannot be greater than maxDepartureTime if minDate equals maxDate.");
                                     }
@@ -3346,10 +3366,10 @@ public class IndexGraphQLSchema {
                                 .build())
                         .dataFetcher(environment -> {
                             return index.getAlerts().stream()
-                                    .filter(alert -> environment.getArgument("feeds") == null || ((List)environment.getArgument("feeds")).contains(alert.getFeedId()))
-                                    .filter(alert -> environment.getArgument("severityLevel") == null || ((List)environment.getArgument("severityLevel")).contains(alert.getAlert().severityLevel))
-                                    .filter(alert -> environment.getArgument("effect") == null || ((List)environment.getArgument("effect")).contains(alert.getAlert().effect))
-                                    .filter(alert -> environment.getArgument("cause") == null || ((List)environment.getArgument("cause")).contains(alert.getAlert().cause))
+                                    .filter(alert -> environment.getArgument("feeds") == null || ((List) environment.getArgument("feeds")).contains(alert.getFeedId()))
+                                    .filter(alert -> environment.getArgument("severityLevel") == null || ((List) environment.getArgument("severityLevel")).contains(alert.getAlert().severityLevel))
+                                    .filter(alert -> environment.getArgument("effect") == null || ((List) environment.getArgument("effect")).contains(alert.getAlert().effect))
+                                    .filter(alert -> environment.getArgument("cause") == null || ((List) environment.getArgument("cause")).contains(alert.getAlert().cause))
                                     .collect(Collectors.toList());
                         })
                         .build())
@@ -3475,7 +3495,8 @@ public class IndexGraphQLSchema {
         if (dateString != null) {
             try {
                 date = ServiceDate.parseString(dateString.replace("-", ""));
-            } catch (ParseException | NullPointerException e) {}
+            } catch (ParseException | NullPointerException e) {
+            }
         }
         return date;
     }
@@ -3483,7 +3504,7 @@ public class IndexGraphQLSchema {
     private int getParameterCount(final DataFetchingEnvironment environment, final String... parameters) {
         final List<String> parameterList = Arrays.asList(parameters);
         final int parameterCount = environment.getArguments().entrySet().stream()
-                .filter(entrySet ->  parameterList.contains(entrySet.getKey()) && entrySet.getValue() != null)
+                .filter(entrySet -> parameterList.contains(entrySet.getKey()) && entrySet.getValue() != null)
                 .collect(Collectors.toList())
                 .size();
         return parameterCount;
