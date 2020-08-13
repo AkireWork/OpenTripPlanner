@@ -49,7 +49,7 @@ class RouteMapper {
         lhs.setBrandingUrl(rhs.getBrandingUrl());
         if (extension != null) {
             Map<String, String> authorities = COMPETENT_AUTHORITY_TABLE.getAuthorities();
-            lhs.setCompetentAuthority(authorities.getOrDefault(extension.getCompetentAuthority(), "-"));
+            lhs.setCompetentAuthority(authorities.getOrDefault(extension.getCompetentAuthority(), ""));
         }
 
         return lhs;
