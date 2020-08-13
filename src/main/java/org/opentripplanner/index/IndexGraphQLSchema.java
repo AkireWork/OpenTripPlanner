@@ -3008,7 +3008,7 @@ public class IndexGraphQLSchema {
                         .argument(GraphQLArgument.newArgument()
                                 .name("competentAuthority")
                                 .description("Query routes by competentAuthority")
-                                .type(Scalars.GraphQLString)
+                                .type(new GraphQLList(Scalars.GraphQLString))
                                 .build())
                         .dataFetcher(environment -> {
                             if ((environment.getArgument("ids") instanceof List)) {
