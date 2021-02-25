@@ -17,6 +17,7 @@ import org.opentripplanner.common.model.P2;
 import org.opentripplanner.gtfs.GtfsLibrary;
 import org.opentripplanner.index.model.StopTimesInPattern;
 import org.opentripplanner.index.model.TripTimeShort;
+import org.opentripplanner.index.model.TripTimesByWeekdays;
 import org.opentripplanner.model.*;
 import org.opentripplanner.model.calendar.ServiceDate;
 import org.opentripplanner.profile.StopCluster;
@@ -261,6 +262,8 @@ public class IndexGraphQLSchema {
     public GraphQLObjectType queryType;
 
     public GraphQLOutputType planType = new GraphQLTypeReference("Plan");
+
+    public GraphQLOutputType tripTimesByWeekdaysType = new GraphQLTypeReference("TripTimesByWeekdays");
 
     public GraphQLSchema indexSchema;
 
@@ -1127,6 +1130,87 @@ public class IndexGraphQLSchema {
                         .build())
                 .build();
 
+        departureRowType = GraphQLObjectType.newObject()
+                .name("DepartureRow")
+                .description("Departure row is a location, which lists departures of a certain pattern from a stop. Departure rows are identified with the pattern, so querying departure rows will return only departures from one stop per pattern")
+                .withInterface(nodeInterface)
+                .withInterface(placeInterface)
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("id")
+                        .description("Global object ID provided by Relay. This value can be used to refetch this object using **node** query.")
+                        .type(new GraphQLNonNull(Scalars.GraphQLID))
+                        .dataFetcher(environment -> relay.toGlobalId(departureRowType.getName(), ((GraphIndex.DepartureRow) environment.getSource()).id))
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("stop")
+                        .description("Stop from which the departures leave")
+                        .type(stopType)
+                        .dataFetcher(environment -> ((GraphIndex.DepartureRow) environment.getSource()).stop)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("lat")
+                        .description("Latitude of the stop (WGS 84)")
+                        .type(Scalars.GraphQLFloat)
+                        .dataFetcher(environment -> ((GraphIndex.DepartureRow) environment.getSource()).stop.getLat())
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("lon")
+                        .description("Longitude of the stop (WGS 84)")
+                        .type(Scalars.GraphQLFloat)
+                        .dataFetcher(environment -> ((GraphIndex.DepartureRow) environment.getSource()).stop.getLon())
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("pattern")
+                        .description("Pattern of the departure row")
+                        .type(patternType)
+                        .dataFetcher(environment -> ((GraphIndex.DepartureRow) environment.getSource()).pattern)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("stoptimes")
+                        .description("Departures of the pattern from the stop")
+                        .type(new GraphQLList(stoptimeType))
+                        .argument(GraphQLArgument.newArgument()
+                                .name("startTime")
+                                .description("Return rows departing after this time. Time format: Unix timestamp in seconds. Default: current time.")
+                                .type(Scalars.GraphQLLong)
+                                .defaultValue(0L) // Default value is current time
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("timeRange")
+                                .description("How many seconds ahead to search for departures. Default is one day.")
+                                .type(Scalars.GraphQLInt)
+                                .defaultValue(24 * 60 * 60)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("numberOfDepartures")
+                                .description("Maximum number of departures to return.")
+                                .type(Scalars.GraphQLInt)
+                                .defaultValue(1)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitNonPickups")
+                                .description("If true, only those departures which allow boarding are returned")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(false)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitCanceled")
+                                .description("If false, returns also canceled trips")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(true)
+                                .build())
+                        .dataFetcher(environment -> {
+                            GraphIndex.DepartureRow departureRow = environment.getSource();
+                            long startTime = environment.getArgument("startTime");
+                            int timeRange = environment.getArgument("timeRange");
+                            int maxDepartures = environment.getArgument("numberOfDepartures");
+                            boolean omitNonPickups = environment.getArgument("omitNonPickups");
+                            boolean omitCanceled = environment.getArgument("omitCanceled");
+                            return departureRow.getStoptimes(index, startTime, timeRange, maxDepartures, omitNonPickups, omitCanceled);
+                        })
+                        .build())
+                .build();
+
         placeAtDistanceType = GraphQLObjectType.newObject()
                 .name("placeAtDistance")
                 .withInterface(nodeInterface)
@@ -1174,6 +1258,21 @@ public class IndexGraphQLSchema {
                         .name("stoptimes")
                         .type(new GraphQLList(stoptimeType))
                         .dataFetcher(environment -> ((StopTimesInPattern) environment.getSource()).times)
+                        .build())
+                .build();
+
+        tripTimesByWeekdaysType = GraphQLObjectType.newObject()
+                .name("TripTimesByWeekdays")
+                .description("Trips stoptimes for week grouped by weekdays")
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("weekdays")
+                        .type(new GraphQLNonNull(Scalars.GraphQLString))
+                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).weekdays)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("stoptimes")
+                        .type(new GraphQLList(stoptimeType))
+                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).tripTimeShortList)
                         .build())
                 .build();
 
@@ -1925,6 +2024,30 @@ public class IndexGraphQLSchema {
                             } catch (ParseException e) {
                                 return null; // Invalid date format
                             }
+                        })
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("stoptimesForWeek")
+                        .type(new GraphQLList(tripTimesByWeekdaysType))
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitNonPickups")
+                                .description("If true, only those departures which allow boarding are returned")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(false)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitCanceled")
+                                .description("If false, returns also canceled trips")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(false)
+                                .build())
+                        .dataFetcher(environment -> {
+                            Trip trip = environment.getSource();
+                            TripPattern tripPattern = index.patternForTrip.get(trip);
+                            boolean omitNonPickups = environment.getArgument("omitNonPickups");
+                            boolean omitCanceled = environment.getArgument("omitCanceled");
+
+                            return index.tripTimesByWeekdays(tripPattern, omitNonPickups, omitCanceled);
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()

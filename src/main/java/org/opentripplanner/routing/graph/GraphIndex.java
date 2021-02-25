@@ -22,6 +22,7 @@ import javax.ws.rs.core.MultivaluedMap;
 import javax.ws.rs.core.Response;
 
 import com.google.common.collect.ArrayListMultimap;
+
 import java.util.BitSet;
 import java.util.Collection;
 import java.util.List;
@@ -49,6 +50,7 @@ import io.sentry.event.EventBuilder;
 
 import org.apache.lucene.util.PriorityQueue;
 import org.joda.time.LocalDate;
+import org.opentripplanner.index.model.TripTimesByWeekdays;
 import org.opentripplanner.model.Agency;
 import org.opentripplanner.model.FeedScopedId;
 import org.opentripplanner.model.FeedInfo;
@@ -122,7 +124,9 @@ public class GraphIndex {
     private static final Logger LOG = LoggerFactory.getLogger(GraphIndex.class);
     private static final int CLUSTER_RADIUS = 400; // meters
 
-    /** maximum distance to walk after leaving transit in Analyst */
+    /**
+     * maximum distance to walk after leaving transit in Analyst
+     */
     public static final int MAX_WALK_METERS = 3500;
 
     // TODO: consistently key on model object or id string
@@ -148,7 +152,7 @@ public class GraphIndex {
 
     /* Should eventually be replaced with new serviceId indexes. */
     private final CalendarService calendarService;
-    private final Map<FeedScopedId,Integer> serviceCodes;
+    private final Map<FeedScopedId, Integer> serviceCodes;
 
     /* Full-text search extensions */
     public transient LuceneIndex luceneIndex;
@@ -160,27 +164,31 @@ public class GraphIndex {
     /* This is a workaround, and should probably eventually be removed. */
     public Graph graph;
 
-    /** Used for finding first/last trip of the day. This is the time at which service ends for the day. */
+    /**
+     * Used for finding first/last trip of the day. This is the time at which service ends for the day.
+     */
     public final int overnightBreak = 60 * 60 * 2; // FIXME not being set, this was done in transitIndex
 
-    /** Store distances from each stop to all nearby street intersections. Useful in speeding up analyst requests. */
+    /**
+     * Store distances from each stop to all nearby street intersections. Useful in speeding up analyst requests.
+     */
     private transient StopTreeCache stopTreeCache = null;
 
     final transient GraphQLSchema indexSchema;
 
     public final ExecutorService threadPool;
 
-    public GraphIndex (Graph graph) {
+    public GraphIndex(Graph graph) {
         LOG.info("Indexing graph...");
 
         FareService fareService = graph.getService(FareService.class);
-        if(fareService instanceof DefaultFareServiceImpl) {
+        if (fareService instanceof DefaultFareServiceImpl) {
             LOG.info("Collecting fare information...");
             DefaultFareServiceImpl defaultFareServiceImpl = (DefaultFareServiceImpl) fareService;
             Map<FareType, Collection<FareRuleSet>> data = defaultFareServiceImpl.getFareRulesPerType();
-            for(Entry<FareType, Collection<FareRuleSet>> kv:data.entrySet()) {
-                if(FareType.regular == kv.getKey()) {
-                    for(FareRuleSet rs: kv.getValue()) {
+            for (Entry<FareType, Collection<FareRuleSet>> kv : data.entrySet()) {
+                if (FareType.regular == kv.getKey()) {
+                    for (FareRuleSet rs : kv.getValue()) {
                         ticketTypesForId.put(rs.getFareAttribute().getId(), new TicketType(rs));
                     }
                 }
@@ -218,10 +226,9 @@ public class GraphIndex {
                 stopVertexForStop.put(stop, transitStop);
                 if (stop.getParentStation() != null) {
                     stopsForParentStation.put(
-                        new FeedScopedId(stop.getId().getAgencyId(), stop.getParentStation()), stop);
+                            new FeedScopedId(stop.getId().getAgencyId(), stop.getParentStation()), stop);
                 }
-            }
-            else if (vertex instanceof TransitStation) {
+            } else if (vertex instanceof TransitStation) {
                 TransitStation transitStation = (TransitStation) vertex;
                 Stop stop = transitStation.getStop();
                 stationForId.put(stop.getId(), stop);
@@ -239,7 +246,7 @@ public class GraphIndex {
                 patternForTrip.put(trip, pattern);
                 tripForId.put(trip.getId(), trip);
             }
-            for (Stop stop: pattern.getStops()) {
+            for (Stop stop : pattern.getStops()) {
                 if (!patternsForStop.containsEntry(stop, pattern)) {
                     patternsForStop.put(stop, pattern);
                 }
@@ -254,8 +261,8 @@ public class GraphIndex {
         serviceCodes = graph.serviceCodes;
         this.graph = graph;
         threadPool = Executors.newCachedThreadPool(
-            new ThreadFactoryBuilder().setNameFormat("GraphQLExecutor-" + graph.routerId + "-%d")
-                .build()
+                new ThreadFactoryBuilder().setNameFormat("GraphQLExecutor-" + graph.routerId + "-%d")
+                        .build()
         );
 
         indexSchema = new IndexGraphQLSchema(this).indexSchema;
@@ -281,7 +288,9 @@ public class GraphIndex {
     }
 
 
-    /** Get all trip patterns running through any stop in the given stop cluster. */
+    /**
+     * Get all trip patterns running through any stop in the given stop cluster.
+     */
     private Set<TripPattern> patternsForStopCluster(StopCluster sc) {
         Set<TripPattern> tripPatterns = Sets.newHashSet();
         for (Stop stop : sc.children) tripPatterns.addAll(patternsForStop.get(stop));
@@ -313,7 +322,7 @@ public class GraphIndex {
                             list = new ProfileTransfer.GoodTransferList();
                             transfers.put(pair, list);
                         }
-                        list.add(new ProfileTransfer(tp0, tp1, sc0, sc1, (int)distance));
+                        list.add(new ProfileTransfer(tp0, tp1, sc0, sc1, (int) distance));
                     }
                 }
             }
@@ -360,7 +369,7 @@ public class GraphIndex {
      * Find transfer candidates for profile routing.
      * TODO replace with an on-street search using the existing profile router functions.
      */
-    public Map<StopCluster, Double> findNearbyStopClusters (StopCluster sc, double radius) {
+    public Map<StopCluster, Double> findNearbyStopClusters(StopCluster sc, double radius) {
         Map<StopCluster, Double> ret = Maps.newHashMap();
         Envelope env = new Envelope(new Coordinate(sc.lon, sc.lat));
         env.expandBy(SphericalDistanceLibrary.metersToLonDegrees(radius, sc.lat),
@@ -374,7 +383,7 @@ public class GraphIndex {
     }
 
     /* TODO: an almost similar function exists in ProfileRouter, combine these.
-    *  Should these live in a separate class? */
+     *  Should these live in a separate class? */
     public List<StopAndDistance> findClosestStopsByWalking(double lat, double lon, int radius) {
         // Make a normal OTP routing request so we can traverse edges and use GenericAStar
         // TODO make a function that builds normal routing requests from profile requests
@@ -400,13 +409,13 @@ public class GraphIndex {
     }
 
     public List<PlaceAndDistance> findClosestPlacesByWalking(double lat, double lon, int maxDistance, int maxResults,
-            List<TraverseMode> filterByModes,
-            List<PlaceType> filterByPlaceTypes,
-            List<FeedScopedId> filterByStops,
-            List<FeedScopedId> filterByRoutes,
-            List<String> filterByBikeRentalStations,
-            List<String> filterByBikeParks,
-            List<String> filterByCarParks) {
+                                                             List<TraverseMode> filterByModes,
+                                                             List<PlaceType> filterByPlaceTypes,
+                                                             List<FeedScopedId> filterByStops,
+                                                             List<FeedScopedId> filterByRoutes,
+                                                             List<String> filterByBikeRentalStations,
+                                                             List<String> filterByBikeParks,
+                                                             List<String> filterByCarParks) {
         RoutingRequest rr = new RoutingRequest(TraverseMode.WALK);
         rr.allowBikeRental = true;
         //rr.bikeParkAndRide = true;
@@ -428,7 +437,7 @@ public class GraphIndex {
         SearchTerminationStrategy strategy = new SearchTerminationStrategy() {
             @Override
             public boolean shouldSearchTerminate(Vertex origin, Vertex target, State current, ShortestPathTree spt,
-                    RoutingRequest traverseOptions) {
+                                                 RoutingRequest traverseOptions) {
                 // the first n stops the search visit may not be the nearest n
                 // but when we have at least n stops found, we can update the
                 // max distance to be the furthest of the places so far
@@ -460,7 +469,7 @@ public class GraphIndex {
                 File directory;
                 try {
                     directory = Files.createTempDirectory(graph.routerId + "_lucene",
-                        (FileAttribute<?>[]) new FileAttribute[]{}).toFile();
+                            (FileAttribute<?>[]) new FileAttribute[]{}).toFile();
                 } catch (IOException e) {
                     return null;
                 }
@@ -475,7 +484,7 @@ public class GraphIndex {
         public Stop stop;
         public int distance;
 
-        public StopAndDistance(Stop stop, int distance){
+        public StopAndDistance(Stop stop, int distance) {
             this.stop = stop;
             this.distance = distance;
         }
@@ -497,14 +506,22 @@ public class GraphIndex {
 
     static private class StopFinderTraverseVisitor implements TraverseVisitor {
         List<StopAndDistance> stopsFound = new ArrayList<>();
-        @Override public void visitEdge(Edge edge, State state) { }
-        @Override public void visitEnqueue(State state) { }
+
+        @Override
+        public void visitEdge(Edge edge, State state) {
+        }
+
+        @Override
+        public void visitEnqueue(State state) {
+        }
+
         // Accumulate stops into ret as the search runs.
-        @Override public void visitVertex(State state) {
+        @Override
+        public void visitVertex(State state) {
             Vertex vertex = state.getVertex();
             if (vertex instanceof TransitStop) {
                 stopsFound.add(new StopAndDistance(((TransitStop) vertex).getStop(),
-                    (int) state.getElapsedTimeSeconds()));
+                        (int) state.getElapsedTimeSeconds()));
             }
         }
     }
@@ -582,30 +599,38 @@ public class GraphIndex {
             includeCarParks = filterByPlaceTypes == null || filterByPlaceTypes.contains(PlaceType.CAR_PARK);
         }
 
-        @Override public void preVisitEdge(Edge edge, State state) {
+        @Override
+        public void preVisitEdge(Edge edge, State state) {
             if (edge instanceof ParkAndRideLinkEdge) {
                 visitVertex(state.edit(edge).makeState());
             } else if (edge instanceof StreetBikeParkLink) {
                 visitVertex(state.edit(edge).makeState());
             }
         }
-        @Override public void visitEdge(Edge edge, State state) {
+
+        @Override
+        public void visitEdge(Edge edge, State state) {
         }
-        @Override public void visitEnqueue(State state) {
+
+        @Override
+        public void visitEnqueue(State state) {
         }
-        @Override public void visitVertex(State state) {
+
+        @Override
+        public void visitVertex(State state) {
             Vertex vertex = state.getVertex();
-            int distance = (int)state.getWalkDistance();
+            int distance = (int) state.getWalkDistance();
             if (vertex instanceof TransitStop) {
-                visitStop(((TransitStop)vertex).getStop(), distance);
+                visitStop(((TransitStop) vertex).getStop(), distance);
             } else if (vertex instanceof BikeRentalStationVertex) {
-                visitBikeRentalStation(((BikeRentalStationVertex)vertex).getStation(), distance);
+                visitBikeRentalStation(((BikeRentalStationVertex) vertex).getStation(), distance);
             } else if (vertex instanceof BikeParkVertex) {
-                visitBikePark(((BikeParkVertex)vertex).getBikePark(), distance);
+                visitBikePark(((BikeParkVertex) vertex).getBikePark(), distance);
             } else if (vertex instanceof ParkAndRideVertex) {
-                visitCarPark(((ParkAndRideVertex)vertex).getCarPark(), distance);
+                visitCarPark(((ParkAndRideVertex) vertex).getCarPark(), distance);
             }
         }
+
         private void visitBikeRentalStation(BikeRentalStation station, int distance) {
             handleBikeRentalStation(station, distance);
         }
@@ -634,11 +659,11 @@ public class GraphIndex {
         private void handleDepartureRows(Stop stop, int distance) {
             if (includeDepartureRows) {
                 List<TripPattern> patterns = patternsForStop.get(stop)
-                    .stream()
-                    .filter(pattern -> filterByModes == null || filterByModes.contains(pattern.mode))
-                    .filter(pattern -> filterByRoutes == null || filterByRoutes.contains(pattern.route.getId()))
-                    .filter(pattern -> pattern.canBoard(pattern.getStopIndex(stop)))
-                    .collect(toList());
+                        .stream()
+                        .filter(pattern -> filterByModes == null || filterByModes.contains(pattern.mode))
+                        .filter(pattern -> filterByRoutes == null || filterByRoutes.contains(pattern.route.getId()))
+                        .filter(pattern -> pattern.canBoard(pattern.getStopIndex(stop)))
+                        .collect(toList());
 
                 for (TripPattern pattern : patterns) {
                     String seenKey = GtfsLibrary.convertIdToString(pattern.route.getId()) + ":" + pattern.code;
@@ -685,8 +710,10 @@ public class GraphIndex {
         return modesForStop(stop).anyMatch(modes::contains);
     }
 
-    /** An OBA Service Date is a local date without timezone, only year month and day. */
-    public BitSet servicesRunning (ServiceDate date) {
+    /**
+     * An OBA Service Date is a local date without timezone, only year month and day.
+     */
+    public BitSet servicesRunning(ServiceDate date) {
         BitSet services = new BitSet(calendarService.getServiceIds().size());
         for (FeedScopedId serviceId : calendarService.getServiceIdsOnDate(date)) {
             int n = serviceCodes.get(serviceId);
@@ -700,11 +727,13 @@ public class GraphIndex {
      * Wraps the other servicesRunning whose parameter is an OBA ServiceDate.
      * Joda LocalDate is a similar class.
      */
-    public BitSet servicesRunning (LocalDate date) {
+    public BitSet servicesRunning(LocalDate date) {
         return servicesRunning(new ServiceDate(date.getYear(), date.getMonthOfYear(), date.getDayOfMonth()));
     }
 
-    /** Dynamically generate the set of Routes passing though a Stop on demand. */
+    /**
+     * Dynamically generate the set of Routes passing though a Stop on demand.
+     */
     public Set<Route> routesForStop(Stop stop) {
         Set<Route> routes = Sets.newHashSet();
         for (TripPattern p : patternsForStop.get(stop)) {
@@ -718,7 +747,7 @@ public class GraphIndex {
      * Fetches two departures for each pattern during the next 24 hours as default
      */
     public Collection<StopTimesInPattern> stopTimesForStop(Stop stop, boolean omitNonPickups, boolean omitCanceled) {
-        return stopTimesForStop(stop, System.currentTimeMillis()/1000, 24 * 60 * 60, 2, omitNonPickups, omitCanceled);
+        return stopTimesForStop(stop, System.currentTimeMillis() / 1000, 24 * 60 * 60, 2, omitNonPickups, omitCanceled);
     }
 
     /**
@@ -728,11 +757,11 @@ public class GraphIndex {
      * from the previous service date can visit the stop later than the current service date's services. This happens
      * eg. with sleeper trains.
      *
-     * @param stop Stop object to perform the search for
-     * @param startTime Start time for the search. Seconds from UNIX epoch
-     * @param timeRange Searches forward for timeRange seconds from startTime
+     * @param stop               Stop object to perform the search for
+     * @param startTime          Start time for the search. Seconds from UNIX epoch
+     * @param timeRange          Searches forward for timeRange seconds from startTime
      * @param numberOfDepartures Number of departures to fetch per pattern
-     * @param omitNonPickups If true, do not include vehicles that will not pick up passengers.
+     * @param omitNonPickups     If true, do not include vehicles that will not pick up passengers.
      * @return
      */
     public List<StopTimesInPattern> stopTimesForStop(final Stop stop, final long startTime, final int timeRange, final int numberOfDepartures, boolean omitNonPickups, boolean omitCanceled) {
@@ -744,7 +773,7 @@ public class GraphIndex {
             final List<TripTimeShort> stopTimesForStop = stopTimesForPattern(stop, pattern, startTime, timeRange, numberOfDepartures, omitNonPickups, omitCanceled);
 
 
-            if (stopTimesForStop.size() >0) {
+            if (stopTimesForStop.size() > 0) {
                 final StopTimesInPattern stopTimes = new StopTimesInPattern(pattern);
                 stopTimes.times.addAll(stopTimesForStop);
                 ret.add(stopTimes);
@@ -761,16 +790,11 @@ public class GraphIndex {
      * later than the current service date's services. This happens eg. with
      * sleeper trains.
      *
-     * @param stop
-     *            Stop object to perform the search for
-     * @param pattern
-     *            The selected pattern. If null an empty list is returned.
-     * @param startTime
-     *            Start time for the search. Seconds from UNIX epoch
-     * @param timeRange
-     *            Searches forward for timeRange seconds from startTime
-     * @param numberOfDepartures
-     *            Number of departures to fetch per pattern
+     * @param stop               Stop object to perform the search for
+     * @param pattern            The selected pattern. If null an empty list is returned.
+     * @param startTime          Start time for the search. Seconds from UNIX epoch
+     * @param timeRange          Searches forward for timeRange seconds from startTime
+     * @param numberOfDepartures Number of departures to fetch per pattern
      * @param omitCanceled
      * @return
      */
@@ -786,30 +810,30 @@ public class GraphIndex {
 
         final PriorityQueue<TripTimeShort> ret = new PriorityQueue<TripTimeShort>(numberOfDepartures) {
 
-                @Override
+            @Override
             protected boolean lessThan(final TripTimeShort t1, final TripTimeShort t2) {
                 return (t1.serviceDay + t1.realtimeDeparture) > (t2.serviceDay
                         + t2.realtimeDeparture);
-                }
-            };
+            }
+        };
 
         final TimetableSnapshot snapshot = (graph.timetableSnapshotSource != null)
-            ? graph.timetableSnapshotSource.getTimetableSnapshot() : null;
+                ? graph.timetableSnapshotSource.getTimetableSnapshot() : null;
 
         Date date = new Date(startTime * 1000);
         final ServiceDate[] serviceDates = {new ServiceDate(date).previous(), new ServiceDate(date), new ServiceDate(date).next()};
-            // Loop through all possible days
+        // Loop through all possible days
         for (final ServiceDate serviceDate : serviceDates) {
             final ServiceDay sd = new ServiceDay(graph, serviceDate, calendarService,
                     pattern.route.getAgency().getId());
-                Timetable tt;
-                if (snapshot != null){
-                    tt = snapshot.resolve(pattern, serviceDate);
-                } else {
-                    tt = pattern.scheduledTimetable;
-                }
+            Timetable tt;
+            if (snapshot != null) {
+                tt = snapshot.resolve(pattern, serviceDate);
+            } else {
+                tt = pattern.scheduledTimetable;
+            }
 
-                if (!tt.temporallyViable(sd, startTime, timeRange, true)) continue;
+            if (!tt.temporallyViable(sd, startTime, timeRange, true)) continue;
 
             final int starttimeSecondsSinceMidnight = sd.secondsSinceMidnight(startTime);
             int stopIndex = 0;
@@ -817,50 +841,131 @@ public class GraphIndex {
             // loop through all stops of pattern
             for (final Stop currStop : pattern.stopPattern.stops) {
                 if (currStop.equals(stop)) {
-                    if(omitNonPickups && pattern.stopPattern.pickups[stopIndex] == pattern.stopPattern.PICKDROP_NONE) continue;
+                    if (omitNonPickups && pattern.stopPattern.pickups[stopIndex] == pattern.stopPattern.PICKDROP_NONE)
+                        continue;
                     for (final TripTimes triptimes : tt.tripTimes) {
                         if (!sd.serviceRunning(triptimes.serviceCode))
                             continue;
                         int stopDepartureTime = triptimes.getDepartureTime(stopIndex);
                         if (!(omitCanceled && triptimes.isCanceledDeparture(stopIndex)) && stopDepartureTime >= starttimeSecondsSinceMidnight && stopDepartureTime < starttimeSecondsSinceMidnight + timeRange) {
                             ret.insertWithOverflow(new TripTimeShort(triptimes, stopIndex, currStop, sd));
-                            }
                         }
+                    }
 
-                        // TODO: This needs to be adapted after #1647 is merged
+                    // TODO: This needs to be adapted after #1647 is merged
                     for (final FrequencyEntry freq : tt.frequencyEntries) {
-                            if (!sd.serviceRunning(freq.tripTimes.serviceCode)) continue;
+                        if (!sd.serviceRunning(freq.tripTimes.serviceCode)) continue;
                         int departureTime = freq.nextDepartureTime(stopIndex, starttimeSecondsSinceMidnight);
-                            if (omitCanceled && departureTime == -1) continue;
+                        if (omitCanceled && departureTime == -1) continue;
                         final int lastDeparture = freq.endTime + freq.tripTimes.getArrivalTime(stopIndex)
                                 - freq.tripTimes.getDepartureTime(0);
                         while (departureTime <= lastDeparture && ret.size() < numberOfDepartures) {
                             ret.insertWithOverflow(new TripTimeShort(freq.materialize(stopIndex, departureTime, true),
                                     stopIndex, currStop, sd));
-                                departureTime += freq.headway;
-                            }
+                            departureTime += freq.headway;
                         }
                     }
-                stopIndex++;
                 }
+                stopIndex++;
             }
+        }
 
         final List<TripTimeShort> result = new ArrayList<>();
-        while(ret.size()>0) {
+        while (ret.size() > 0) {
             TripTimeShort tripTimeShort = ret.pop();
             if (!result.contains(tripTimeShort)) {
                 result.add(0, tripTimeShort);
-                }
             }
-        return result;
         }
+        return result;
+    }
+
+    public String getDayName(int day) {
+        switch (day) {
+            case 1:
+                return "P";
+            case 2:
+                return "E";
+            case 3:
+                return "T";
+            case 4:
+                return "K";
+            case 5:
+                return "N";
+            case 6:
+                return "R";
+            case 7:
+                return "L";
+            default:
+                return "";
+        }
+    }
+
+    public List<TripTimesByWeekdays> tripTimesByWeekdays(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
+        if (pattern == null) {
+            return Collections.emptyList();
+        }
+        List<TripTimesByWeekdays> ret = new ArrayList<>();
+        TimetableSnapshot snapshot = null;
+        if (graph.timetableSnapshotSource != null) {
+            snapshot = graph.timetableSnapshotSource.getTimetableSnapshot();
+        }
+
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 0); // ! clear would not reset the hour of day !
+        cal.clear(Calendar.MINUTE);
+        cal.clear(Calendar.SECOND);
+        cal.clear(Calendar.MILLISECOND);
+
+        // get start of this week in milliseconds
+        cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
+//        ServiceDate[] serviceDates = {new ServiceDate(cal.getTime()).previous(), new ServiceDate(date), new ServiceDate(date).next()};
+        List<ServiceDate> serviceDates = new ArrayList<>();
+        serviceDates.add(new ServiceDate(cal.getTime()));
+        for (int i = 1; i < 7; i++) {
+            cal.add(Calendar.DATE, 1);
+            serviceDates.add(new ServiceDate(cal.getTime()));
+        }
+
+        for (final ServiceDate serviceDate : serviceDates) {
+            TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays(getDayName(cal.get(Calendar.DAY_OF_WEEK)));
+            Timetable tt;
+            if (snapshot != null) {
+                tt = snapshot.resolve(pattern, serviceDate);
+            } else {
+                tt = pattern.scheduledTimetable;
+            }
+            ServiceDay sd = new ServiceDay(graph, serviceDate, calendarService, pattern.route.getAgency().getId());
+            int sidx = 0;
+            for (Stop currStop : pattern.stopPattern.stops) {
+                if (omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE) continue;
+                for (TripTimes t : tt.tripTimes) {
+                    if (!sd.serviceRunning(t.serviceCode)) continue;
+                    if (omitCanceled && t.isTimeCanceled(sidx)) continue;
+                    tripTimesByWeekdays.tripTimeShortList.add(new TripTimeShort(t, sidx, currStop, sd));
+                }
+                sidx++;
+            }
+            ret.add(tripTimesByWeekdays);
+        }
+
+        return ret.stream().flatMap(tripTimesByWeekdays -> tripTimesByWeekdays.tripTimeShortList.stream()
+                .map(tripTimeShort -> new AbstractMap.SimpleEntry<>(tripTimesByWeekdays, tripTimeShort)))
+                .collect(Collectors.groupingBy(tripTimesByWeekdaysTimesSimpleEntry -> tripTimesByWeekdaysTimesSimpleEntry.getValue().scheduledDeparture)).values().stream()
+                .map(tripTimesByWeekdays -> new TripTimesByWeekdays(
+                        tripTimesByWeekdays.stream().map(val -> val.getKey().weekdays).collect(Collectors.joining()),
+                        tripTimesByWeekdays.stream().flatMap(val -> val.getKey().tripTimeShortList.stream()).collect(Collectors.toList())
+                )
+        ).collect(Collectors.toList());
+
+    }
 
     /**
      * Get a list of all trips that pass through a stop during a single ServiceDate. Useful when creating complete stop
      * timetables for a single day.
      *
-     * @param stop Stop object to perform the search for
-     * @param serviceDate Return all departures for the specified date
+     * @param stop         Stop object to perform the search for
+     * @param serviceDate  Return all departures for the specified date
      * @param omitCanceled
      * @return
      */
@@ -874,7 +979,7 @@ public class GraphIndex {
         for (TripPattern pattern : patterns) {
             StopTimesInPattern stopTimes = new StopTimesInPattern(pattern);
             Timetable tt;
-            if (snapshot != null){
+            if (snapshot != null) {
                 tt = snapshot.resolve(pattern, serviceDate);
             } else {
                 tt = pattern.scheduledTimetable;
@@ -883,7 +988,8 @@ public class GraphIndex {
             int sidx = 0;
             for (Stop currStop : pattern.stopPattern.stops) {
                 if (currStop.equals(stop)) {
-                    if(omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE) continue;
+                    if (omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE)
+                        continue;
                     for (TripTimes t : tt.tripTimes) {
                         if (!sd.serviceRunning(t.serviceCode)) continue;
                         if (omitCanceled && t.isTimeCanceled(sidx)) continue;
@@ -897,7 +1003,9 @@ public class GraphIndex {
         return ret;
     }
 
-    /** Fetch a cache of nearby intersection distances for every transit stop in this graph, lazy-building as needed. */
+    /**
+     * Fetch a cache of nearby intersection distances for every transit stop in this graph, lazy-building as needed.
+     */
     public StopTreeCache getStopTreeCache() {
         if (stopTreeCache == null) {
             synchronized (this) {
@@ -914,9 +1022,9 @@ public class GraphIndex {
      * There should probably be a less awkward way to do this that just gets the latest entry from the resolver without
      * making a fake routing request.
      */
-    public Timetable currentUpdatedTimetableForTripPattern (TripPattern tripPattern) {
+    public Timetable currentUpdatedTimetableForTripPattern(TripPattern tripPattern) {
         RoutingRequest req = new RoutingRequest();
-        req.setRoutingContext(graph, (Vertex)null, (Vertex)null);
+        req.setRoutingContext(graph, (Vertex) null, (Vertex) null);
         // The timetableSnapshot will be null if there's no real-time data being applied.
         if (req.rctx.timetableSnapshot == null) return tripPattern.scheduledTimetable;
         // Get the updated times for right now, which is the only reasonable default since no date is supplied.
@@ -930,7 +1038,7 @@ public class GraphIndex {
      * according to a parent/child station topology, if it exists.
      */
     private void clusterStops() {
-    	if (graph.stopClusterMode == StopClusterMode.parentStation) {
+        if (graph.stopClusterMode == StopClusterMode.parentStation) {
             clusterByParentStation();
         } else {
             clusterByProximityAndName();
@@ -943,50 +1051,50 @@ public class GraphIndex {
      * world. It depends on the exact way stops are named and the way street intersections are named in that geographic
      * region and in the GTFS data sets which represent it. Based on comments, apparently it might work for TriMet
      * as well.
-     *
+     * <p>
      * We can't use a name similarity comparison, we need exact matches. This is because many street names differ by
      * only one letter or number, e.g. 34th and 35th or Avenue A and Avenue B. Therefore normalizing the names before
      * the comparison is essential. The agency must provide either parent station information or a well thought out stop
      * naming scheme to cluster stops -- no guessing is reasonable without that information.
      */
     private void clusterByProximityAndName() {
-    	int psIdx = 0; // unique index for next parent stop
-	    LOG.info("Clustering stops by geographic proximity and name...");
-	    // Each stop without a cluster will greedily claim other stops without clusters.
-	    for (Stop s0 : stopForId.values()) {
-	        if (stopClusterForStop.containsKey(s0)) continue; // skip stops that have already been claimed by a cluster
-	        String s0normalizedName = StopNameNormalizer.normalize(s0.getName());
-	        StopCluster cluster = new StopCluster(String.format("C%03d", psIdx++), s0normalizedName);
-	        // LOG.info("stop {}", s0normalizedName);
-	        // No need to explicitly add s0 to the cluster. It will be found in the spatial index query below.
-	        Envelope env = new Envelope(new Coordinate(s0.getLon(), s0.getLat()));
-	        env.expandBy(SphericalDistanceLibrary.metersToLonDegrees(CLUSTER_RADIUS, s0.getLat()),
-	                SphericalDistanceLibrary.metersToDegrees(CLUSTER_RADIUS));
-	        for (TransitStop ts1 : stopSpatialIndex.query(env)) {
-	            Stop s1 = ts1.getStop();
-	            double geoDistance = SphericalDistanceLibrary.fastDistance(
-	                    s0.getLat(), s0.getLon(), s1.getLat(), s1.getLon());
-	            if (geoDistance < CLUSTER_RADIUS) {
-	                String s1normalizedName = StopNameNormalizer.normalize(s1.getName());
-	                // LOG.info("   --> {}", s1normalizedName);
-	                // LOG.info("       geodist {} stringdist {}", geoDistance, stringDistance);
-	                if (s1normalizedName.equals(s0normalizedName)) {
-	                    // Create a bidirectional relationship between the stop and its cluster
-	                    cluster.children.add(s1);
-	                    stopClusterForStop.put(s1, cluster);
-	                }
-	            }
-	        }
-	        cluster.computeCenter();
-	        stopClusterForId.put(cluster.id, cluster);
-	    }
+        int psIdx = 0; // unique index for next parent stop
+        LOG.info("Clustering stops by geographic proximity and name...");
+        // Each stop without a cluster will greedily claim other stops without clusters.
+        for (Stop s0 : stopForId.values()) {
+            if (stopClusterForStop.containsKey(s0)) continue; // skip stops that have already been claimed by a cluster
+            String s0normalizedName = StopNameNormalizer.normalize(s0.getName());
+            StopCluster cluster = new StopCluster(String.format("C%03d", psIdx++), s0normalizedName);
+            // LOG.info("stop {}", s0normalizedName);
+            // No need to explicitly add s0 to the cluster. It will be found in the spatial index query below.
+            Envelope env = new Envelope(new Coordinate(s0.getLon(), s0.getLat()));
+            env.expandBy(SphericalDistanceLibrary.metersToLonDegrees(CLUSTER_RADIUS, s0.getLat()),
+                    SphericalDistanceLibrary.metersToDegrees(CLUSTER_RADIUS));
+            for (TransitStop ts1 : stopSpatialIndex.query(env)) {
+                Stop s1 = ts1.getStop();
+                double geoDistance = SphericalDistanceLibrary.fastDistance(
+                        s0.getLat(), s0.getLon(), s1.getLat(), s1.getLon());
+                if (geoDistance < CLUSTER_RADIUS) {
+                    String s1normalizedName = StopNameNormalizer.normalize(s1.getName());
+                    // LOG.info("   --> {}", s1normalizedName);
+                    // LOG.info("       geodist {} stringdist {}", geoDistance, stringDistance);
+                    if (s1normalizedName.equals(s0normalizedName)) {
+                        // Create a bidirectional relationship between the stop and its cluster
+                        cluster.children.add(s1);
+                        stopClusterForStop.put(s1, cluster);
+                    }
+                }
+            }
+            cluster.computeCenter();
+            stopClusterForId.put(cluster.id, cluster);
+        }
     }
 
     /**
      * Rather than using the names and geographic locations of stops to cluster them, group them by their declared
      * parent station in the GTFS data. This should be a much more reliable method where these fields have been
      * included in the GTFS data. However:
-     *
+     * <p>
      * FIXME OBA parentStation field is a string, not an AgencyAndId, so it has no agency/feed scope.
      * That means it would only work reliably if there is only one GTFS feed loaded.
      * The DC regional graph has no parent stations pre-defined, so we use the alternative proximity / name method.
@@ -994,30 +1102,30 @@ public class GraphIndex {
      */
     private void clusterByParentStation() {
         LOG.info("Clustering stops by parent station...");
-    	for (Stop stop : stopForId.values()) {
-    	    String ps = stop.getParentStation();
-    	    if (ps == null || ps.isEmpty()) {
-    	        continue;
-    	    }
-    	    StopCluster cluster;
-    	    if (stopClusterForId.containsKey(ps)) {
-    	        cluster = stopClusterForId.get(ps);
-    	    } else {
-    	        cluster = new StopCluster(ps, stop.getName());
-    	        Stop parent = graph.parentStopById.get(new FeedScopedId(stop.getId().getAgencyId(), ps));
+        for (Stop stop : stopForId.values()) {
+            String ps = stop.getParentStation();
+            if (ps == null || ps.isEmpty()) {
+                continue;
+            }
+            StopCluster cluster;
+            if (stopClusterForId.containsKey(ps)) {
+                cluster = stopClusterForId.get(ps);
+            } else {
+                cluster = new StopCluster(ps, stop.getName());
+                Stop parent = graph.parentStopById.get(new FeedScopedId(stop.getId().getAgencyId(), ps));
                 cluster.setCoordinates(parent.getLat(), parent.getLon());
                 stopClusterForId.put(ps, cluster);
 
-	        }
-    	    cluster.children.add(stop);
-    	    stopClusterForStop.put(stop, cluster);
-    	}
+            }
+            cluster.children.add(stop);
+            stopClusterForStop.put(stop, cluster);
+        }
     }
 
     public Response getGraphQLResponse(String query, Router router, Map<String, Object> variables, String operationName, int timeout, long maxResolves, MultivaluedMap<String, String> headers) {
         Response.ResponseBuilder res = Response.status(Response.Status.OK);
         HashMap<String, Object> content = getGraphQLExecutionResult(query, router, variables,
-            operationName, timeout, maxResolves, headers);
+                operationName, timeout, maxResolves, headers);
         if (content.get("errors") != null) {
             // TODO: Put correct error code, eg. 400 for syntax error
             res = Response.status(Response.Status.INTERNAL_SERVER_ERROR);
@@ -1026,10 +1134,10 @@ public class GraphIndex {
     }
 
     public HashMap<String, Object> getGraphQLExecutionResult(String query, Router router,
-        Map<String, Object> variables, String operationName, int timeout, long maxResolves, MultivaluedMap<String, String> headers) {
+                                                             Map<String, Object> variables, String operationName, int timeout, long maxResolves, MultivaluedMap<String, String> headers) {
 
         GraphQL graphQL = GraphQL.newGraphQL(indexSchema).queryExecutionStrategy(
-            new ResourceConstrainedExecutorServiceExecutionStrategy(threadPool, timeout, TimeUnit.MILLISECONDS, maxResolves)
+                new ResourceConstrainedExecutorServiceExecutionStrategy(threadPool, timeout, TimeUnit.MILLISECONDS, maxResolves)
         ).instrumentation(FieldErrorInstrumentation.get(query, router, variables, headers)).build();
 
         if (variables == null) {
@@ -1041,27 +1149,27 @@ public class GraphIndex {
 
         if (!executionResult.getErrors().isEmpty()) {
             content.put("errors",
-                executionResult
-                    .getErrors()
-                    .stream()
-                    .map(error -> {
-                        if (error instanceof ExceptionWhileDataFetching) {
-                            StringWriter sw = new StringWriter();
-                            PrintWriter pw = new PrintWriter(sw);
-                            ((ExceptionWhileDataFetching) error).getException().printStackTrace(pw);
-                            HashMap<String, Object> response = new HashMap<String, Object>();
-                            response.put("message", error.getMessage());
-                            response.put("locations", error.getLocations());
-                            response.put("errorType", error.getErrorType());
-                            // Convert stack trace to proper format
-                            Stream<StackTraceElement> stack = Arrays.stream(((ExceptionWhileDataFetching) error).getException().getStackTrace());
-                            response.put("stack", stack.map(StackTraceElement::toString).collect(Collectors.toList()));
-                            return response;
-                        } else {
-                            return error;
-                        }
-                    })
-                    .collect(Collectors.toList()));
+                    executionResult
+                            .getErrors()
+                            .stream()
+                            .map(error -> {
+                                if (error instanceof ExceptionWhileDataFetching) {
+                                    StringWriter sw = new StringWriter();
+                                    PrintWriter pw = new PrintWriter(sw);
+                                    ((ExceptionWhileDataFetching) error).getException().printStackTrace(pw);
+                                    HashMap<String, Object> response = new HashMap<String, Object>();
+                                    response.put("message", error.getMessage());
+                                    response.put("locations", error.getLocations());
+                                    response.put("errorType", error.getErrorType());
+                                    // Convert stack trace to proper format
+                                    Stream<StackTraceElement> stack = Arrays.stream(((ExceptionWhileDataFetching) error).getException().getStackTrace());
+                                    response.put("stack", stack.map(StackTraceElement::toString).collect(Collectors.toList()));
+                                    return response;
+                                } else {
+                                    return error;
+                                }
+                            })
+                            .collect(Collectors.toList()));
 
             for (GraphQLError error : executionResult.getErrors()) {
                 Sentry.getContext().addExtra("message", error.getMessage());
@@ -1070,9 +1178,9 @@ public class GraphIndex {
                     Sentry.capture(((ExceptionWhileDataFetching) error).getException());
                 } else {
                     EventBuilder builder = new EventBuilder()
-                        .withMessage(error.toString())
-                        .withLevel(Event.Level.ERROR)
-                        .withLogger(LOG.getName());
+                            .withMessage(error.toString())
+                            .withLevel(Event.Level.ERROR)
+                            .withLogger(LOG.getName());
                     Sentry.capture(builder);
                 }
             }
@@ -1088,44 +1196,44 @@ public class GraphIndex {
             return Stream.empty();
         }
         return graph.updaterManager.getUpdaterList().stream()
-            .filter(GtfsRealtimeAlertsUpdater.class::isInstance)
-            .map(GtfsRealtimeAlertsUpdater.class::cast)
-            .map(GtfsRealtimeAlertsUpdater::getAlertPatchService)
-            .map(AlertPatchService::getAllAlertPatches)
-            .flatMap(Collection::stream);
+                .filter(GtfsRealtimeAlertsUpdater.class::isInstance)
+                .map(GtfsRealtimeAlertsUpdater.class::cast)
+                .map(GtfsRealtimeAlertsUpdater::getAlertPatchService)
+                .map(AlertPatchService::getAllAlertPatches)
+                .flatMap(Collection::stream);
     }
 
     public List<AlertPatch> getAlerts() {
         return getAlertPatchStream()
-            .collect(Collectors.toList());
+                .collect(Collectors.toList());
     }
 
     public List<AlertPatch> getAlertsForRoute(Route route) {
         return getAlertPatchStream()
-            .filter(alertPatch -> alertPatch.getRoute() != null)
-            .filter(alertPatch -> route.getId().equals(alertPatch.getRoute()))
-            .collect(Collectors.toList());
+                .filter(alertPatch -> alertPatch.getRoute() != null)
+                .filter(alertPatch -> route.getId().equals(alertPatch.getRoute()))
+                .collect(Collectors.toList());
     }
 
     public List<AlertPatch> getAlertsForTrip(Trip trip) {
         return getAlertPatchStream()
-            .filter(alertPatch -> alertPatch.getTrip() != null)
-            .filter(alertPatch -> trip.getId().equals(alertPatch.getTrip()))
-            .collect(Collectors.toList());
+                .filter(alertPatch -> alertPatch.getTrip() != null)
+                .filter(alertPatch -> trip.getId().equals(alertPatch.getTrip()))
+                .collect(Collectors.toList());
     }
 
     public List<AlertPatch> getAlertsForPattern(TripPattern pattern) {
         return getAlertPatchStream()
-            .filter(alertPatch -> alertPatch.getTripPatterns() != null)
-            .filter(alertPatch -> alertPatch.getTripPatterns().stream().anyMatch(tripPattern -> pattern.code.equals(tripPattern.code)))
-            .collect(Collectors.toList());
+                .filter(alertPatch -> alertPatch.getTripPatterns() != null)
+                .filter(alertPatch -> alertPatch.getTripPatterns().stream().anyMatch(tripPattern -> pattern.code.equals(tripPattern.code)))
+                .collect(Collectors.toList());
     }
 
     public List<AlertPatch> getAlertsForAgency(Agency agency) {
         return getAlertPatchStream()
-            .filter(alertPatch -> alertPatch.getAgency() != null)
-            .filter(alertPatch -> agency.getId().equals(alertPatch.getAgency()))
-            .collect(Collectors.toList());
+                .filter(alertPatch -> alertPatch.getAgency() != null)
+                .filter(alertPatch -> agency.getId().equals(alertPatch.getAgency()))
+                .collect(Collectors.toList());
     }
 
     public List<AlertPatch> getAlertsForStop(Stop stop) {
@@ -1196,20 +1304,20 @@ public class GraphIndex {
     /**
      * Method for getting TripTimeShort objects.
      *
-     * @param patterns TripPattern objects that are filtered to produce TripTimeShort objects.
-     * @param tripIds List of trip gtfsIds that are used to filter TripTimeShort objects
-     * @param minDate Only TripTimeShort objects scheduled to run on minDate or after are returned.
-     * @param maxDate Only TripTimeShort objects scheduled to run on maxDate or before are returned.
+     * @param patterns         TripPattern objects that are filtered to produce TripTimeShort objects.
+     * @param tripIds          List of trip gtfsIds that are used to filter TripTimeShort objects
+     * @param minDate          Only TripTimeShort objects scheduled to run on minDate or after are returned.
+     * @param maxDate          Only TripTimeShort objects scheduled to run on maxDate or before are returned.
      * @param minDepartureTime Only TripTimeShort objects that have first stop departure time at minDepartureTime or
      *                         after are returned.
      * @param maxDepartureTime Only TripTimeShort objects that have first stop departure time at maxDepartureTime or
      *                         before are returned.
-     * @param minArrivalTime Only TripTimeShort objects that have last stop arrival time at minArrivalTime or after are
-     *                       returned.
-     * @param maxArrivalTime Only TripTimeShort objects that have last stop arrival time at maxArrivalTime or before are
-     *                       returned.
-     * @param state Only TripTimeShort objects with this RealTimeState are returned. Not null. Does not return SCHEDULED
-     *              TripTimeShort objects unless there have been trip updates on them.
+     * @param minArrivalTime   Only TripTimeShort objects that have last stop arrival time at minArrivalTime or after are
+     *                         returned.
+     * @param maxArrivalTime   Only TripTimeShort objects that have last stop arrival time at maxArrivalTime or before are
+     *                         returned.
+     * @param state            Only TripTimeShort objects with this RealTimeState are returned. Not null. Does not return SCHEDULED
+     *                         TripTimeShort objects unless there have been trip updates on them.
      * @return List of TripTimeShort objects.
      */
     public List<TripTimeShort> getTripTimes(final Collection<TripPattern> patterns, final List<String> tripIds, final ServiceDate minDate, final ServiceDate maxDate, final Integer minDepartureTime, final Integer maxDepartureTime, final Integer minArrivalTime, final Integer maxArrivalTime, final RealTimeState state) {
