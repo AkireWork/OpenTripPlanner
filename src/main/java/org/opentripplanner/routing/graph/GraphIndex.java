@@ -906,10 +906,6 @@ public class GraphIndex {
             return Collections.emptyList();
         }
         List<TripTimesByWeekdays> ret = new ArrayList<>();
-        TimetableSnapshot snapshot = null;
-        if (graph.timetableSnapshotSource != null) {
-            snapshot = graph.timetableSnapshotSource.getTimetableSnapshot();
-        }
 
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, 0); // ! clear would not reset the hour of day !
@@ -927,14 +923,9 @@ public class GraphIndex {
             serviceDates.add(new ServiceDate(cal.getTime()));
         }
 
-        for (final ServiceDate serviceDate : serviceDates) {
-            TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays(getDayName(cal.get(Calendar.DAY_OF_WEEK)));
-            Timetable tt;
-            if (snapshot != null) {
-                tt = snapshot.resolve(pattern, serviceDate);
-            } else {
-                tt = pattern.scheduledTimetable;
-            }
+        for (ServiceDate serviceDate : serviceDates) {
+            TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays(getDayName(serviceDate.getDay()));
+            Timetable tt = pattern.scheduledTimetable;
             ServiceDay sd = new ServiceDay(graph, serviceDate, calendarService, pattern.route.getAgency().getId());
             int sidx = 0;
             for (Stop currStop : pattern.stopPattern.stops) {
@@ -949,15 +940,35 @@ public class GraphIndex {
             ret.add(tripTimesByWeekdays);
         }
 
-        return ret.stream().flatMap(tripTimesByWeekdays -> tripTimesByWeekdays.tripTimeShortList.stream()
+        List<TripTimesByWeekdays> uniques = new ArrayList<>();
+
+        ret.stream().flatMap(tripTimesByWeekdays -> tripTimesByWeekdays.tripTimeShortList.stream()
                 .map(tripTimeShort -> new AbstractMap.SimpleEntry<>(tripTimesByWeekdays, tripTimeShort)))
                 .collect(Collectors.groupingBy(tripTimesByWeekdaysTimesSimpleEntry -> tripTimesByWeekdaysTimesSimpleEntry.getValue().scheduledDeparture)).values().stream()
                 .map(tripTimesByWeekdays -> new TripTimesByWeekdays(
-                        tripTimesByWeekdays.stream().map(val -> val.getKey().weekdays).collect(Collectors.joining()),
-                        tripTimesByWeekdays.stream().flatMap(val -> val.getKey().tripTimeShortList.stream()).collect(Collectors.toList())
-                )
-        ).collect(Collectors.toList());
-
+                                tripTimesByWeekdays.stream().map(val -> val.getKey().weekdays).collect(Collectors.joining()),
+                                tripTimesByWeekdays.stream().flatMap(val -> val.getKey().tripTimeShortList.stream()).collect(Collectors.toList())
+                        )
+                ).forEach(tripTimesByWeekdays -> {
+                    if (uniques.isEmpty()) {
+                        uniques.add(tripTimesByWeekdays);
+                    } else {
+                        uniques.stream().forEach(tripTimesByWeekdays1 -> {
+                            if (tripTimesByWeekdays1.weekdays.equals(tripTimesByWeekdays.weekdays)) {
+                                List<TripTimeShort> list = tripTimesByWeekdays1.tripTimeShortList;
+                                list.addAll(tripTimesByWeekdays1.tripTimeShortList);
+                                Set<TripTimeShort> set = new LinkedHashSet<>(list);
+                                tripTimesByWeekdays1.tripTimeShortList.clear();
+                                tripTimesByWeekdays1.tripTimeShortList.addAll(set);
+                                set.clear();
+                                list.clear();
+                            } else {
+                                uniques.add(tripTimesByWeekdays);
+                            }
+                        });
+                    }
+                });
+        return uniques;
     }
 
     /**
