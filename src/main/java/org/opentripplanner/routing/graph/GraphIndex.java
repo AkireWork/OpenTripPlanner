@@ -946,7 +946,7 @@ public class GraphIndex {
                 .map(tripTimeShort -> new AbstractMap.SimpleEntry<>(tripTimesByWeekdays, tripTimeShort)))
                 .collect(Collectors.groupingBy(tripTimesByWeekdaysTimesSimpleEntry -> tripTimesByWeekdaysTimesSimpleEntry.getValue().scheduledDeparture)).values().stream()
                 .map(tripTimesByWeekdays -> new TripTimesByWeekdays(
-                                tripTimesByWeekdays.stream().map(val -> val.getKey().weekdays).collect(Collectors.joining()),
+                                tripTimesByWeekdays.stream().map(val -> val.getKey().weekdays).collect(Collectors.joining(",")),
                                 tripTimesByWeekdays.stream().flatMap(val -> val.getKey().tripTimeShortList.stream()).collect(Collectors.toList())
                         )
                 ).collect(Collectors.toList());
