@@ -942,33 +942,34 @@ public class GraphIndex {
 
         List<TripTimesByWeekdays> uniques = new ArrayList<>();
 
-        ret.stream().flatMap(tripTimesByWeekdays -> tripTimesByWeekdays.tripTimeShortList.stream()
+        return ret.stream().flatMap(tripTimesByWeekdays -> tripTimesByWeekdays.tripTimeShortList.stream()
                 .map(tripTimeShort -> new AbstractMap.SimpleEntry<>(tripTimesByWeekdays, tripTimeShort)))
                 .collect(Collectors.groupingBy(tripTimesByWeekdaysTimesSimpleEntry -> tripTimesByWeekdaysTimesSimpleEntry.getValue().scheduledDeparture)).values().stream()
                 .map(tripTimesByWeekdays -> new TripTimesByWeekdays(
                                 tripTimesByWeekdays.stream().map(val -> val.getKey().weekdays).collect(Collectors.joining()),
                                 tripTimesByWeekdays.stream().flatMap(val -> val.getKey().tripTimeShortList.stream()).collect(Collectors.toList())
                         )
-                ).forEach(tripTimesByWeekdays -> {
-                    if (uniques.isEmpty()) {
-                        uniques.add(tripTimesByWeekdays);
-                    } else {
-                        uniques.stream().forEach(tripTimesByWeekdays1 -> {
-                            if (tripTimesByWeekdays1.weekdays.equals(tripTimesByWeekdays.weekdays)) {
-                                List<TripTimeShort> list = tripTimesByWeekdays1.tripTimeShortList;
-                                list.addAll(tripTimesByWeekdays1.tripTimeShortList);
-                                Set<TripTimeShort> set = new LinkedHashSet<>(list);
-                                tripTimesByWeekdays1.tripTimeShortList.clear();
-                                tripTimesByWeekdays1.tripTimeShortList.addAll(set);
-                                set.clear();
-                                list.clear();
-                            } else {
-                                uniques.add(tripTimesByWeekdays);
-                            }
-                        });
-                    }
-                });
-        return uniques;
+                ).collect(Collectors.toList());
+//                .forEach(tripTimesByWeekdays -> {
+//                    if (uniques.isEmpty()) {
+//                        uniques.add(tripTimesByWeekdays);
+//                    } else {
+//                        uniques.stream().forEach(tripTimesByWeekdays1 -> {
+//                            if (tripTimesByWeekdays1.weekdays.equals(tripTimesByWeekdays.weekdays)) {
+//                                List<TripTimeShort> list = tripTimesByWeekdays1.tripTimeShortList;
+//                                list.addAll(tripTimesByWeekdays1.tripTimeShortList);
+//                                Set<TripTimeShort> set = new LinkedHashSet<>(list);
+//                                tripTimesByWeekdays1.tripTimeShortList.clear();
+//                                tripTimesByWeekdays1.tripTimeShortList.addAll(set);
+//                                set.clear();
+//                                list.clear();
+//                            } else {
+//                                uniques.add(tripTimesByWeekdays);
+//                            }
+//                        });
+//                    }
+//                });
+//        return uniques;
     }
 
     /**
