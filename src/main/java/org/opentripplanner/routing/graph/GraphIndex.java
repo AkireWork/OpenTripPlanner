@@ -883,19 +883,19 @@ public class GraphIndex {
     public String getDayName(int day) {
         switch (day) {
             case 1:
-                return "P";
-            case 2:
                 return "E";
-            case 3:
+            case 2:
                 return "T";
-            case 4:
+            case 3:
                 return "K";
-            case 5:
+            case 4:
                 return "N";
-            case 6:
+            case 5:
                 return "R";
-            case 7:
+            case 6:
                 return "L";
+            case 7:
+                return "P";
             default:
                 return "";
         }
