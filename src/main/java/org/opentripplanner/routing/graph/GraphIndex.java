@@ -50,7 +50,7 @@ import io.sentry.event.EventBuilder;
 
 import org.apache.lucene.util.PriorityQueue;
 import org.joda.time.LocalDate;
-import org.opentripplanner.index.model.TripTimesByWeekdays;
+import org.opentripplanner.index.model.TripTimesByStopName;
 import org.opentripplanner.model.Agency;
 import org.opentripplanner.model.FeedScopedId;
 import org.opentripplanner.model.FeedInfo;
@@ -880,7 +880,8 @@ public class GraphIndex {
         return result;
     }
 
-    public String getDayName(int day) {
+    private String getDayName(int day) {
+//        @ServiceDate week starts from Monday
         switch (day) {
             case 1:
                 return "E";
@@ -901,11 +902,30 @@ public class GraphIndex {
         }
     }
 
-    public List<TripTimesByWeekdays> tripTimesByWeekdays(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
-        if (pattern == null) {
-            return Collections.emptyList();
+    private void addTripTimeToTripTimesByStopNameList(List<TripTimesByStopName> tripTimesByStopNames, TripTimeShort tripTime, Stop stop, String dayName) {
+        if (tripTimesByStopNames.isEmpty()) {
+            tripTimesByStopNames.add(new TripTimesByStopName(stop.getName()));
         }
-        List<TripTimesByWeekdays> ret = new ArrayList<>();
+        String[] scores = new String[tripTimesByStopNames.size()];
+        for (int idx = 0; idx < tripTimesByStopNames.size(); idx++) {
+            scores[idx] = tripTimesByStopNames.get(idx).computeScore(tripTime, stop, dayName)+":"+idx;//add index to last split
+        }
+        if (Arrays.stream(scores).noneMatch(s -> Integer.parseInt(s.split(":")[0]) == 7)) {
+            String[] arrDesc = Arrays.stream(scores)
+                    .sorted(Comparator.comparing((String s) -> Integer.parseInt(s.split(":")[0])).thenComparing(Comparator.comparing(o -> Integer.parseInt(o.split(":")[1]))))
+                    .toArray(String[]::new);
+            if (arrDesc.length > 0) {//get first score from sorted array, and use its list index ref  from splitted String
+                tripTimesByStopNames.get(Integer.parseInt(arrDesc[0].split(":")[2]))
+                        .addTripTimesByDay(tripTime, stop, dayName);
+            }
+        }
+    }
+
+    public List<TripTimesByStopName> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
+        if (pattern == null) {
+            return null;
+        }
+        List<TripTimesByStopName> tripTimesByStopNames = new ArrayList<>();
 
         Calendar cal = Calendar.getInstance();
         cal.set(Calendar.HOUR_OF_DAY, 0); // ! clear would not reset the hour of day !
@@ -924,7 +944,7 @@ public class GraphIndex {
         }
 
         for (ServiceDate serviceDate : serviceDates) {
-            TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays(getDayName(serviceDate.getDay()));
+            TripTimesByStopName tripTimesByWeekdays = new TripTimesByStopName(getDayName(serviceDate.getDay()));
             Timetable tt = pattern.scheduledTimetable;
             ServiceDay sd = new ServiceDay(graph, serviceDate, calendarService, pattern.route.getAgency().getId());
             int sidx = 0;
@@ -933,43 +953,14 @@ public class GraphIndex {
                 for (TripTimes t : tt.tripTimes) {
                     if (!sd.serviceRunning(t.serviceCode)) continue;
                     if (omitCanceled && t.isTimeCanceled(sidx)) continue;
-                    tripTimesByWeekdays.tripTimeShortList.add(new TripTimeShort(t, sidx, currStop, sd));
+                    addTripTimeToTripTimesByStopNameList(tripTimesByStopNames, new TripTimeShort(t, sidx, currStop, sd), currStop, getDayName(serviceDate.getDay()));
                 }
                 sidx++;
             }
-            ret.add(tripTimesByWeekdays);
+            tripTimesByStopNames.add(tripTimesByWeekdays);
         }
 
-        List<TripTimesByWeekdays> uniques = new ArrayList<>();
-
-        return ret.stream().flatMap(tripTimesByWeekdays -> tripTimesByWeekdays.tripTimeShortList.stream()
-                .map(tripTimeShort -> new AbstractMap.SimpleEntry<>(tripTimesByWeekdays, tripTimeShort)))
-                .collect(Collectors.groupingBy(tripTimesByWeekdaysTimesSimpleEntry -> tripTimesByWeekdaysTimesSimpleEntry.getValue().scheduledDeparture)).values().stream()
-                .map(tripTimesByWeekdays -> new TripTimesByWeekdays(
-                                tripTimesByWeekdays.stream().map(val -> val.getKey().weekdays).collect(Collectors.joining(",")),
-                                tripTimesByWeekdays.stream().flatMap(val -> val.getKey().tripTimeShortList.stream()).collect(Collectors.toList())
-                        )
-                ).collect(Collectors.toList());
-//                .forEach(tripTimesByWeekdays -> {
-//                    if (uniques.isEmpty()) {
-//                        uniques.add(tripTimesByWeekdays);
-//                    } else {
-//                        uniques.stream().forEach(tripTimesByWeekdays1 -> {
-//                            if (tripTimesByWeekdays1.weekdays.equals(tripTimesByWeekdays.weekdays)) {
-//                                List<TripTimeShort> list = tripTimesByWeekdays1.tripTimeShortList;
-//                                list.addAll(tripTimesByWeekdays1.tripTimeShortList);
-//                                Set<TripTimeShort> set = new LinkedHashSet<>(list);
-//                                tripTimesByWeekdays1.tripTimeShortList.clear();
-//                                tripTimesByWeekdays1.tripTimeShortList.addAll(set);
-//                                set.clear();
-//                                list.clear();
-//                            } else {
-//                                uniques.add(tripTimesByWeekdays);
-//                            }
-//                        });
-//                    }
-//                });
-//        return uniques;
+        return tripTimesByStopNames;
     }
 
     /**
