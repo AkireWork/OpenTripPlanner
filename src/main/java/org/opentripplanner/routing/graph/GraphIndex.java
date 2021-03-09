@@ -880,23 +880,23 @@ public class GraphIndex {
         return result;
     }
 
-    private String getDayName(int day) {
+    public String getDayName(int day) {
 //        @ServiceDate week starts from Monday
         switch (day) {
             case 1:
-                return "E";
-            case 2:
-                return "T";
-            case 3:
-                return "K";
-            case 4:
-                return "N";
-            case 5:
-                return "R";
-            case 6:
-                return "L";
-            case 7:
                 return "P";
+            case 2:
+                return "E";
+            case 3:
+                return "T";
+            case 4:
+                return "K";
+            case 5:
+                return "N";
+            case 6:
+                return "R";
+            case 7:
+                return "L";
             default:
                 return "";
         }
@@ -955,7 +955,12 @@ public class GraphIndex {
                 for (TripTimes t : tt.tripTimes) {
                     if (!sd.serviceRunning(t.serviceCode)) continue;
                     if (omitCanceled && t.isTimeCanceled(sidx)) continue;
-                    addTripTimeToTripTimesByStopNameList(tripTimesByStopNames, new TripTimeShort(t, sidx, currStop, sd), currStop, getDayName(serviceDate.getDay()));
+                    addTripTimeToTripTimesByStopNameList(
+                            tripTimesByStopNames,
+                            new TripTimeShort(t, sidx, currStop, sd),
+                            currStop,
+                            getDayName(serviceDate.getAsCalendar(TimeZone.getTimeZone("et_EE")).get(Calendar.DAY_OF_WEEK))
+                    );
                 }
                 sidx++;
             }
