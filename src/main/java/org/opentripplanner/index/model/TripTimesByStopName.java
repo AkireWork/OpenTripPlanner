@@ -82,12 +82,19 @@ public class TripTimesByStopName {
             return distance;
         }
 
+        public void sort() {
+            this.tripTimeShortList.sort(Comparator.comparingInt(o -> o.scheduledDeparture));
+        }
+
         public void addTripTimeShort(TripTimeShort tripTimeShort) {
             Optional<TripTimeShort> first = this.tripTimeShortList.stream()
                     .filter(tripTimeShort1 -> tripTimeShort1.scheduledDeparture == tripTimeShort.scheduledDeparture)
                     .findFirst();
             if (!first.isPresent()) {
                 this.tripTimeShortList.add(tripTimeShort);
+                if (this.tripTimeShortList.size() > 1) {
+                    sort();
+                }
             }
         }
 
