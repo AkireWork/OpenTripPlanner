@@ -903,25 +903,25 @@ public class GraphIndex {
     }
 
     private void addTripTimeToTripTimesByStopNameList(List<TripTimesByStopName> tripTimesByStopNames, TripTimeShort tripTime, Stop stop, String dayName) {
-        Optional<TripTimesByStopName> tripTimesByStopName = tripTimesByStopNames.stream()
-                .filter(tripTimesByStopName1 -> tripTimesByStopName1.stopName.equals(stop.getName()))
-                .findFirst();
-        if (!tripTimesByStopName.isPresent()) {//if stop name does not exist
+        if (tripTimesByStopNames.stream().noneMatch(tripTimesByStopName1 -> tripTimesByStopName1.stopName.equals(stop.getName()))) {//if stop name does not exist
             tripTimesByStopNames.add(new TripTimesByStopName(stop.getName()));
         }
-        String[] scores = new String[tripTimesByStopNames.size()];
-        for (int idx = 0; idx < tripTimesByStopNames.size(); idx++) {
-            scores[idx] = tripTimesByStopNames.get(idx).computeScore(tripTime, stop, dayName)+":"+idx;//add index to last split
+        for (TripTimesByStopName tripTimesByStopName : tripTimesByStopNames) {
+            tripTimesByStopName.addTripTimesByDay(tripTime, stop, dayName);
         }
-        if (Arrays.stream(scores).noneMatch(s -> Integer.parseInt(s.split(":")[0]) == 7)) {
-            String[] arrDesc = Arrays.stream(scores)
-                    .sorted(Comparator.comparing((String s) -> Integer.parseInt(s.split(":")[0])).thenComparing(Comparator.comparing(o -> Integer.parseInt(o.split(":")[1]))))
-                    .toArray(String[]::new);
-            if (arrDesc.length > 0) {//get first score from sorted array, and use its list index ref  from splitted String
-                tripTimesByStopNames.get(Integer.parseInt(arrDesc[0].split(":")[2]))
-                        .addTripTimesByDay(tripTime, stop, dayName);
-            }
-        }
+//        String[] scores = new String[tripTimesByStopNames.size()];
+//        for (int idx = 0; idx < tripTimesByStopNames.size(); idx++) {
+//            scores[idx] = tripTimesByStopNames.get(idx).computeScore(tripTime, stop, dayName)+":"+idx;//add index to last split
+//        }
+//        if (Arrays.stream(scores).noneMatch(s -> Integer.parseInt(s.split(":")[0]) == 7)) {
+//            String[] arrDesc = Arrays.stream(scores)
+//                    .sorted(Comparator.comparing((String s) -> Integer.parseInt(s.split(":")[0])).thenComparing(Comparator.comparing(o -> Integer.parseInt(o.split(":")[1]))))
+//                    .toArray(String[]::new);
+//            if (arrDesc.length > 0) {//get first score from sorted array, and use its list index ref  from splitted String
+//                tripTimesByStopNames.get(Integer.parseInt(arrDesc[0].split(":")[2]))
+//                        .addTripTimesByDay(tripTime, stop, dayName);
+//            }
+//        }
     }
 
     public List<TripTimesByStopName> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
