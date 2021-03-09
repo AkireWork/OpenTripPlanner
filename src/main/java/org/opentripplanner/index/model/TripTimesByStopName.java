@@ -35,16 +35,15 @@ public class TripTimesByStopName {
         return ""+occurrenceScore+":"+closestStoptimeDistance;
     }
 
-    public boolean addTripTimesByDay(TripTimeShort tripTime, Stop stop, String dayName) {
+    public void addTripTimesByDay(TripTimeShort tripTime, Stop stop, String dayName) {
         Optional<TripTimesByDay> tripTimesByDay = this.tripTimesByDays.stream()
                 .filter(tripTimesByDay1 -> tripTimesByDay1.dayName.equals(dayName))
                 .findFirst();
 
         if (tripTimesByDay.isPresent()) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
-            return this.stopName.equals(dayName) && tripTimesByDay.get().addTripTimeShort(tripTime);
+            tripTimesByDay.get().addTripTimeShort(tripTime);
         } else {
             this.tripTimesByDays.add(new TripTimesByDay(dayName, tripTime));
-            return true;
         }
     }
 
@@ -81,15 +80,12 @@ public class TripTimesByStopName {
             return distance;
         }
 
-        public boolean addTripTimeShort(TripTimeShort tripTimeShort) {
+        public void addTripTimeShort(TripTimeShort tripTimeShort) {
             Optional<TripTimeShort> first = this.tripTimeShortList.stream()
                     .filter(tripTimeShort1 -> tripTimeShort1.scheduledDeparture == tripTimeShort.scheduledDeparture)
                     .findFirst();
             if (!first.isPresent()) {
                 this.tripTimeShortList.add(tripTimeShort);
-                return true;
-            } else {
-                return false;
             }
         }
 

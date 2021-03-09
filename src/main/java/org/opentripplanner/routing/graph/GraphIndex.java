@@ -903,7 +903,10 @@ public class GraphIndex {
     }
 
     private void addTripTimeToTripTimesByStopNameList(List<TripTimesByStopName> tripTimesByStopNames, TripTimeShort tripTime, Stop stop, String dayName) {
-        if (tripTimesByStopNames.isEmpty()) {
+        Optional<TripTimesByStopName> tripTimesByStopName = tripTimesByStopNames.stream()
+                .filter(tripTimesByStopName1 -> tripTimesByStopName1.stopName.equals(stop.getName()))
+                .findFirst();
+        if (!tripTimesByStopName.isPresent()) {//if stop name exists
             tripTimesByStopNames.add(new TripTimesByStopName(stop.getName()));
         }
         String[] scores = new String[tripTimesByStopNames.size()];
@@ -944,7 +947,6 @@ public class GraphIndex {
         }
 
         for (ServiceDate serviceDate : serviceDates) {
-            TripTimesByStopName tripTimesByWeekdays = new TripTimesByStopName(getDayName(serviceDate.getDay()));
             Timetable tt = pattern.scheduledTimetable;
             ServiceDay sd = new ServiceDay(graph, serviceDate, calendarService, pattern.route.getAgency().getId());
             int sidx = 0;
@@ -957,7 +959,6 @@ public class GraphIndex {
                 }
                 sidx++;
             }
-            tripTimesByStopNames.add(tripTimesByWeekdays);
         }
 
         return tripTimesByStopNames;
