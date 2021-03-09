@@ -36,14 +36,16 @@ public class TripTimesByStopName {
     }
 
     public void addTripTimesByDay(TripTimeShort tripTime, Stop stop, String dayName) {
-        Optional<TripTimesByDay> tripTimesByDay = this.tripTimesByDays.stream()
-                .filter(tripTimesByDay1 -> tripTimesByDay1.dayName.equals(dayName))
-                .findFirst();
+        if (this.stopName.equals(stop.getName())) {
+            Optional<TripTimesByDay> tripTimesByDay = this.tripTimesByDays.stream()
+                    .filter(tripTimesByDay1 -> tripTimesByDay1.dayName.equals(dayName))
+                    .findFirst();
 
-        if (tripTimesByDay.isPresent()) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
-            tripTimesByDay.get().addTripTimeShort(tripTime);
-        } else {
-            this.tripTimesByDays.add(new TripTimesByDay(dayName, tripTime));
+            if (tripTimesByDay.isPresent()) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
+                tripTimesByDay.get().addTripTimeShort(tripTime);
+            } else {
+                this.tripTimesByDays.add(new TripTimesByDay(dayName, tripTime));
+            }
         }
     }
 

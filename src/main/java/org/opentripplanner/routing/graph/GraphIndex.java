@@ -906,7 +906,7 @@ public class GraphIndex {
         Optional<TripTimesByStopName> tripTimesByStopName = tripTimesByStopNames.stream()
                 .filter(tripTimesByStopName1 -> tripTimesByStopName1.stopName.equals(stop.getName()))
                 .findFirst();
-        if (!tripTimesByStopName.isPresent()) {//if stop name exists
+        if (!tripTimesByStopName.isPresent()) {//if stop name does not exist
             tripTimesByStopNames.add(new TripTimesByStopName(stop.getName()));
         }
         String[] scores = new String[tripTimesByStopNames.size()];
