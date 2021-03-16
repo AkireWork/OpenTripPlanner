@@ -24,15 +24,21 @@
       "type": "real-time-alerts",
       "frequencySec": 30,
       "url": "http://beta.digitransit.fi/hslalert/",
-      "fuzzyTripMatching": true
-      "feedId": "hsl-alerts",
+      "fuzzyTripMatching": true,
+      "feedId": "hsl-alerts"
+    },
+    {
+      "type": "bike-rental",
+      "frequencySec": 60,
+      "sourceType": "tartu-bycicle-park",
+      "url": "https://api.ratas.tartu.ee/cxf/am/station/map/search/"
     }
   ],
-  boardTimes: {
-    AIRPLANE: 2700
+  "boardTimes": {
+    "AIRPLANE": 2700
   },
-  alightTimes: {
-    AIRPLANE: 1200
+  "alightTimes": {
+    "AIRPLANE": 1200
   }
 }
 
