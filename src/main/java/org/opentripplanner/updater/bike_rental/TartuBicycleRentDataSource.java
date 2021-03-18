@@ -2,6 +2,7 @@ package org.opentripplanner.updater.bike_rental;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.opentripplanner.routing.bike_rental.BikeRentalStation;
 import org.opentripplanner.util.HttpUtils;
 import org.opentripplanner.util.NonLocalizedString;
@@ -11,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URL;
+import java.util.ArrayList;
 
 public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource {
     private static final Logger log = LoggerFactory.getLogger(TartuBicycleRentDataSource.class);
@@ -61,5 +63,47 @@ public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource 
             return false;
         }
         return true;
+    }
+
+    private void parseJSON(InputStream dataStream) throws IllegalArgumentException, IOException {
+
+        ArrayList<BikeRentalStation> out = new ArrayList<>();
+
+        String rentalString = convertStreamToString(dataStream);
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode rootNode = mapper.readTree(rentalString);
+
+        for (int i = 0; i < rootNode.size(); i++) {
+            // TODO can we use foreach? for (JsonNode node : rootNode) ...
+            JsonNode node = rootNode.get(i);
+            if (node == null) {
+                continue;
+            }
+            BikeRentalStation brstation = makeStation(node);
+            if (brstation != null)
+                out.add(brstation);
+        }
+        synchronized(this) {
+            stations = out;
+        }
+    }
+
+    private String convertStreamToString(java.io.InputStream is) {
+        java.util.Scanner scanner = null;
+        String result="";
+        try {
+
+            scanner = new java.util.Scanner(is).useDelimiter("\\A");
+            result = scanner.hasNext() ? scanner.next() : "";
+            scanner.close();
+        }
+        finally
+        {
+            if(scanner!=null)
+                scanner.close();
+        }
+        return result;
+
     }
 }
