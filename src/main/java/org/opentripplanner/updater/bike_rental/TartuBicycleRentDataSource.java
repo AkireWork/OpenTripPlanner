@@ -73,7 +73,7 @@ public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource 
         String rentalString = convertStreamToString(dataStream);
 
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode = mapper.readTree(rentalString);
+        JsonNode rootNode = mapper.readTree(rentalString).get("results").get(0);
 
         for (int i = 0; i < rootNode.size(); i++) {
             // TODO can we use foreach? for (JsonNode node : rootNode) ...
