@@ -22,8 +22,8 @@ public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource 
     public BikeRentalStation makeStation(JsonNode rentalStationNode) {
         BikeRentalStation bikeRentalStation = new BikeRentalStation();
         bikeRentalStation.id = rentalStationNode.get("id").textValue();
-//        bikeRentalStation.x = rentalStationNode.get("area").get("latitude").doubleValue() / 1000000.0;
-//        bikeRentalStation.y = rentalStationNode.get("area").get("longitude").doubleValue() / 1000000.0;
+        bikeRentalStation.x = rentalStationNode.path("area").path("latitude").doubleValue() / 1000000.0;
+        bikeRentalStation.y = rentalStationNode.path("area").path("longitude").doubleValue() / 1000000.0;
         bikeRentalStation.name = new NonLocalizedString(rentalStationNode.get("name").textValue());
         bikeRentalStation.bikesAvailable =
                 rentalStationNode.get("overFullCycleStockingCount").intValue() - rentalStationNode.get("freeSpacesCount").intValue();
@@ -73,7 +73,7 @@ public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource 
         String rentalString = convertStreamToString(dataStream);
 
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode rootNode = mapper.readTree(rentalString).get("results").get(0);
+        JsonNode rootNode = mapper.readTree(rentalString).get("results");
 
         for (int i = 0; i < rootNode.size(); i++) {
             // TODO can we use foreach? for (JsonNode node : rootNode) ...
