@@ -15,6 +15,7 @@ import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.config.SocketConfig;
 import org.apache.http.entity.BasicHttpEntity;
+import org.apache.http.entity.StringEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 
 public class HttpUtils {
@@ -27,17 +28,21 @@ public class HttpUtils {
     }
 
     public static InputStream getPostData(String url) throws IOException {
-        return getPostData(url, null, null);
+        return getPostData(url, null, null, null);
     }
 
-    public static InputStream getPostData(String url, String requestHeaderName, String requestHeaderValue) throws ClientProtocolException, IOException {
+    public static InputStream getPostData(String url, String requestHeaderName, String requestHeaderValue) throws IOException {
+        return getPostData(url, requestHeaderName, requestHeaderValue, null);
+    }
+
+    public static InputStream getPostData(String url, String requestHeaderName, String requestHeaderValue, HttpEntity httpEntity) throws ClientProtocolException, IOException {
         HttpPost httpPost = new HttpPost(url);
         if (requestHeaderValue != null) {
             httpPost.addHeader(requestHeaderName, requestHeaderValue);
         }
-        httpPost.addHeader("Content-Type", "application/json");
-        HttpEntity entity1 = new BasicHttpEntity();
-        httpPost.setEntity(entity1);
+        if (httpEntity != null) {
+            httpPost.setEntity(httpEntity);
+        }
         HttpClient httpclient = getClient();
         HttpResponse response = httpclient.execute(httpPost);
         if(response.getStatusLine().getStatusCode() != 200)

@@ -3,6 +3,7 @@ package org.opentripplanner.updater.bike_rental;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.apache.http.entity.StringEntity;
 import org.opentripplanner.routing.bike_rental.BikeRentalStation;
 import org.opentripplanner.util.HttpUtils;
 import org.opentripplanner.util.NonLocalizedString;
@@ -40,7 +41,7 @@ public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource 
 
             String proto = url2.getProtocol();
             if (proto.equals("http") || proto.equals("https")) {
-                data = HttpUtils.getPostData(super.getUrl());
+                data = HttpUtils.getPostData(super.getUrl(), "Content-Type", "application/json", new StringEntity(""));
             } else {
                 // Local file probably, try standard java
                 data = url2.openStream();
