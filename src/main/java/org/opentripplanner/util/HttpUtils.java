@@ -14,6 +14,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpHead;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.config.SocketConfig;
+import org.apache.http.entity.BasicHttpEntity;
 import org.apache.http.impl.client.HttpClientBuilder;
 
 public class HttpUtils {
@@ -34,6 +35,9 @@ public class HttpUtils {
         if (requestHeaderValue != null) {
             httpPost.addHeader(requestHeaderName, requestHeaderValue);
         }
+        httpPost.addHeader("Content-Type", "application/json");
+        HttpEntity entity1 = new BasicHttpEntity();
+        httpPost.setEntity(entity1);
         HttpClient httpclient = getClient();
         HttpResponse response = httpclient.execute(httpPost);
         if(response.getStatusLine().getStatusCode() != 200)
