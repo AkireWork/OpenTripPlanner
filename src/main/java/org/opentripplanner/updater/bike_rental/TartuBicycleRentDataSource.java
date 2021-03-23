@@ -25,10 +25,8 @@ public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource 
         bikeRentalStation.y = rentalStationNode.path("area").path("latitude").doubleValue();
         bikeRentalStation.x = rentalStationNode.path("area").path("longitude").doubleValue();
         bikeRentalStation.name = new NonLocalizedString(rentalStationNode.get("name").textValue());
-        bikeRentalStation.bikesAvailable =
-                rentalStationNode.get("overFullCycleStockingCount").intValue() - rentalStationNode.get("freeSpacesCount").intValue();
-        bikeRentalStation.spacesAvailable =
-                rentalStationNode.get("fullCycleStockingCount").intValue() - rentalStationNode.get("freeDocksCount").intValue();
+        bikeRentalStation.bikesAvailable = rentalStationNode.get("primaryLockedCycleCount").intValue();
+        bikeRentalStation.spacesAvailable = rentalStationNode.get("freeDocksCount").intValue();
         return bikeRentalStation;
     }
 
