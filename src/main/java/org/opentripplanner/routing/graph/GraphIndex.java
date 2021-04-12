@@ -50,7 +50,7 @@ import io.sentry.event.EventBuilder;
 
 import org.apache.lucene.util.PriorityQueue;
 import org.joda.time.LocalDate;
-import org.opentripplanner.index.model.TripTimesByStopName;
+import org.opentripplanner.index.model.TripTimesByWeekdays;
 import org.opentripplanner.model.Agency;
 import org.opentripplanner.model.FeedScopedId;
 import org.opentripplanner.model.FeedInfo;
@@ -884,31 +884,38 @@ public class GraphIndex {
 //        @ServiceDate week starts from Monday
         switch (day) {
             case 1:
-                return "P";
-            case 2:
                 return "E";
-            case 3:
+            case 2:
                 return "T";
-            case 4:
+            case 3:
                 return "K";
-            case 5:
+            case 4:
                 return "N";
-            case 6:
+            case 5:
                 return "R";
-            case 7:
+            case 6:
                 return "L";
+            case 7:
+                return "P";
             default:
                 return "";
         }
     }
 
-    private void addTripTimeToTripTimesByStopNameList(List<TripTimesByStopName> tripTimesByStopNames, TripTimeShort tripTime, Stop stop, String dayName) {
-        if (tripTimesByStopNames.stream().noneMatch(tripTimesByStopName1 -> tripTimesByStopName1.stopName.equals(stop.getName()))) {//if stop name does not exist
-            tripTimesByStopNames.add(new TripTimesByStopName(stop.getName()));
+    private void addTripTimeToTripTimesByStopNameList(List<TripTimesByWeekdays> tripTimesByWeekdays, TripTimeShort tripTime, Stop stop, Set<ServiceDate> serviceDates) {
+        String weekdays = serviceDates.stream().sorted(Comparator.comparingInt(ServiceDate::getDay).reversed())
+                .map(serviceDate -> getDayName(serviceDate.getDay()))
+                .collect(Collectors.joining(","));
+
+        Optional<TripTimesByWeekdays> optionalTripTimesByWeekdays = tripTimesByWeekdays.stream()
+                .filter(tripTimesByWeekdays1 -> tripTimesByWeekdays1.weekdays.equals(weekdays)).findFirst();
+
+        if (!optionalTripTimesByWeekdays.isPresent()) {//if none with said weekdays exist
+            tripTimesByWeekdays.add(new TripTimesByWeekdays(weekdays));
+        } else {
+            optionalTripTimesByWeekdays.get().addTripTimeByWeekdays(tripTime, stop, weekdays);
         }
-        for (TripTimesByStopName tripTimesByStopName : tripTimesByStopNames) {
-            tripTimesByStopName.addTripTimesByDay(tripTime, stop, dayName);
-        }
+
 //        String[] scores = new String[tripTimesByStopNames.size()];
 //        for (int idx = 0; idx < tripTimesByStopNames.size(); idx++) {
 //            scores[idx] = tripTimesByStopNames.get(idx).computeScore(tripTime, stop, dayName)+":"+idx;//add index to last split
@@ -924,49 +931,32 @@ public class GraphIndex {
 //        }
     }
 
-    public List<TripTimesByStopName> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
+    public List<TripTimesByWeekdays> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
         if (pattern == null) {
             return null;
         }
-        List<TripTimesByStopName> tripTimesByStopNames = new ArrayList<>();
+        List<TripTimesByWeekdays> tripTimesByWeekdays = new ArrayList<>();
 
-        Calendar cal = Calendar.getInstance();
-        cal.set(Calendar.HOUR_OF_DAY, 0); // ! clear would not reset the hour of day !
-        cal.clear(Calendar.MINUTE);
-        cal.clear(Calendar.SECOND);
-        cal.clear(Calendar.MILLISECOND);
+        System.out.println(pattern.getTrips());
+        System.out.println(pattern.getServices());
 
-        // get start of this week in milliseconds
-        cal.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY);
-//        ServiceDate[] serviceDates = {new ServiceDate(cal.getTime()).previous(), new ServiceDate(date), new ServiceDate(date).next()};
-        List<ServiceDate> serviceDates = new ArrayList<>();
-        serviceDates.add(new ServiceDate(cal.getTime()));
-        for (int i = 1; i < 7; i++) {
-            cal.add(Calendar.DATE, 1);
-            serviceDates.add(new ServiceDate(cal.getTime()));
-        }
-
-        for (ServiceDate serviceDate : serviceDates) {
-            Timetable tt = pattern.scheduledTimetable;
-            ServiceDay sd = new ServiceDay(graph, serviceDate, calendarService, pattern.route.getAgency().getId());
-            int sidx = 0;
-            for (Stop currStop : pattern.stopPattern.stops) {
-                if (omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE) continue;
-                for (TripTimes t : tt.tripTimes) {
-                    if (!sd.serviceRunning(t.serviceCode)) continue;
-                    if (omitCanceled && t.isTimeCanceled(sidx)) continue;
-                    addTripTimeToTripTimesByStopNameList(
-                            tripTimesByStopNames,
-                            new TripTimeShort(t, sidx, currStop, sd),
-                            currStop,
-                            getDayName(serviceDate.getAsCalendar(TimeZone.getTimeZone("et_EE")).get(Calendar.DAY_OF_WEEK))
-                    );
-                }
-                sidx++;
+        Timetable tt = pattern.scheduledTimetable;
+        int sidx = 0;
+        for (Stop currStop : pattern.stopPattern.stops) {
+            if (omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE) continue;
+            for (TripTimes t : tt.tripTimes) {
+                if (omitCanceled && t.isTimeCanceled(sidx)) continue;
+                addTripTimeToTripTimesByStopNameList(
+                        tripTimesByWeekdays,
+                        new TripTimeShort(t, sidx, currStop),
+                        currStop,
+                        graph.getCalendarService().getServiceDatesForServiceId(t.trip.getServiceId())
+                );
             }
+            sidx++;
         }
 
-        return tripTimesByStopNames;
+        return tripTimesByWeekdays;
     }
 
     /**
