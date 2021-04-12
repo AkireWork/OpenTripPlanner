@@ -418,7 +418,7 @@
         <repository>
             <id>download.java.net</id>
             <name>Java.net Repository for Maven</name>
-            <url>http://download.java.net/maven/2/</url>
+            <url>https://download.java.net/maven/2/</url>
         </repository>
         <repository>
             <id>osgeo</id>
@@ -443,7 +443,7 @@
         <repository>
             <id>onebusaway-releases</id>
             <name>Onebusaway Releases Repo</name>
-            <url>http://nexus.onebusaway.org/content/repositories/releases/</url>
+            <url>https://nexus.onebusaway.org/content/repositories/releases/</url>
         </repository>
     </repositories>
 
