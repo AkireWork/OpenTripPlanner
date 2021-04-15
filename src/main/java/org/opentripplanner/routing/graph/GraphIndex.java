@@ -902,10 +902,24 @@ public class GraphIndex {
         }
     }
 
+    public String replaceDays(String days) {
+        String match = "ETKNRLP";
+        System.out.println(days);
+        if (match.contains(days) && days.length() > 2) {
+            char[] chars = days.toCharArray();
+            return chars[0] + "-" + chars[days.length() - 1];
+        } else {
+            return String.join(",", days.split(""));
+        }
+    }
+
     private void addTripTimeToTripTimesByStopNameList(List<TripTimesByWeekdays> tripTimesByWeekdays, TripTimeShort tripTime, Stop stop, Set<ServiceDate> serviceDates) {
-        String weekdays = serviceDates.stream().sorted(Comparator.comparingInt(ServiceDate::getDay).reversed())
+        String weekdays = replaceDays(serviceDates.stream().sorted(Comparator.comparingInt(ServiceDate::getDay))
                 .map(serviceDate -> getDayName(serviceDate.getDay()))
-                .collect(Collectors.joining(","));
+                .filter(s -> !s.isEmpty())
+                .distinct()
+                .collect(Collectors.joining()));
+        System.out.println(weekdays);
 
         Optional<TripTimesByWeekdays> optionalTripTimesByWeekdays = tripTimesByWeekdays.stream()
                 .filter(tripTimesByWeekdays1 -> tripTimesByWeekdays1.weekdays.equals(weekdays)).findFirst();
