@@ -1,61 +1,8 @@
 package org.opentripplanner.routing.graph;
 
-import com.google.common.collect.*;
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import com.vividsolutions.jts.geom.Coordinate;
-import com.vividsolutions.jts.geom.Envelope;
-import graphql.ExceptionWhileDataFetching;
-import graphql.ExecutionResult;
-import graphql.GraphQL;
-import graphql.GraphQLError;
-import graphql.schema.GraphQLSchema;
-import io.sentry.Sentry;
-import io.sentry.event.Event;
-import io.sentry.event.EventBuilder;
-import org.apache.lucene.util.PriorityQueue;
-import org.joda.time.LocalDate;
-import org.opentripplanner.common.LuceneIndex;
-import org.opentripplanner.common.geometry.HashGridSpatialIndex;
-import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
-import org.opentripplanner.common.model.GenericLocation;
-import org.opentripplanner.common.model.P2;
-import org.opentripplanner.gtfs.GtfsLibrary;
-import org.opentripplanner.index.FieldErrorInstrumentation;
-import org.opentripplanner.index.IndexGraphQLSchema;
-import org.opentripplanner.index.ResourceConstrainedExecutorServiceExecutionStrategy;
-import org.opentripplanner.index.model.StopTimesInPattern;
-import org.opentripplanner.index.model.TripTimeShort;
-import org.opentripplanner.index.model.TripTimesByStopName;
-import org.opentripplanner.model.*;
-import org.opentripplanner.model.calendar.ServiceDate;
-import org.opentripplanner.profile.*;
-import org.opentripplanner.routing.alertpatch.AlertPatch;
-import org.opentripplanner.routing.algorithm.AStar;
-import org.opentripplanner.routing.algorithm.ExtendedTraverseVisitor;
-import org.opentripplanner.routing.algorithm.TraverseVisitor;
-import org.opentripplanner.routing.algorithm.strategies.SearchTerminationStrategy;
-import org.opentripplanner.routing.bike_park.BikePark;
-import org.opentripplanner.routing.bike_rental.BikeRentalStation;
-import org.opentripplanner.routing.car_park.CarPark;
-import org.opentripplanner.routing.core.Fare.FareType;
-import org.opentripplanner.routing.core.*;
-import org.opentripplanner.routing.edgetype.*;
-import org.opentripplanner.routing.impl.DefaultFareServiceImpl;
-import org.opentripplanner.routing.services.AlertPatchService;
-import org.opentripplanner.routing.services.FareService;
-import org.opentripplanner.routing.spt.DominanceFunction;
-import org.opentripplanner.routing.spt.ShortestPathTree;
-import org.opentripplanner.routing.trippattern.FrequencyEntry;
-import org.opentripplanner.routing.trippattern.RealTimeState;
-import org.opentripplanner.routing.trippattern.TripTimes;
-import org.opentripplanner.routing.vertextype.*;
-import org.opentripplanner.standalone.Router;
-import org.opentripplanner.updater.alerts.GtfsRealtimeAlertsUpdater;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import static java.lang.Math.min;
+import static java.util.stream.Collectors.toList;
 
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -71,8 +18,101 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static java.lang.Math.min;
-import static java.util.stream.Collectors.toList;
+import javax.ws.rs.core.MultivaluedMap;
+import javax.ws.rs.core.Response;
+
+import com.google.common.collect.ArrayListMultimap;
+
+import java.util.BitSet;
+import java.util.Collection;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.Calendar;
+
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
+import com.google.common.collect.Sets;
+import graphql.ExceptionWhileDataFetching;
+import graphql.GraphQLError;
+import graphql.schema.GraphQLSchema;
+
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.vividsolutions.jts.geom.Coordinate;
+import com.vividsolutions.jts.geom.Envelope;
+import graphql.ExecutionResult;
+import graphql.GraphQL;
+import io.sentry.Sentry;
+import io.sentry.event.Event;
+import io.sentry.event.EventBuilder;
+
+import org.apache.lucene.util.PriorityQueue;
+import org.joda.time.LocalDate;
+import org.opentripplanner.index.model.TripTimesByWeekdays;
+import org.opentripplanner.model.Agency;
+import org.opentripplanner.model.FeedScopedId;
+import org.opentripplanner.model.FeedInfo;
+import org.opentripplanner.model.Route;
+import org.opentripplanner.model.Stop;
+import org.opentripplanner.model.Trip;
+import org.opentripplanner.model.calendar.ServiceDate;
+import org.opentripplanner.model.CalendarService;
+import org.opentripplanner.common.LuceneIndex;
+import org.opentripplanner.common.geometry.HashGridSpatialIndex;
+import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
+import org.opentripplanner.common.model.GenericLocation;
+import org.opentripplanner.common.model.P2;
+import org.opentripplanner.gtfs.GtfsLibrary;
+import org.opentripplanner.index.FieldErrorInstrumentation;
+import org.opentripplanner.index.IndexGraphQLSchema;
+import org.opentripplanner.index.ResourceConstrainedExecutorServiceExecutionStrategy;
+import org.opentripplanner.index.model.StopTimesInPattern;
+import org.opentripplanner.index.model.TripTimeShort;
+import org.opentripplanner.profile.ProfileTransfer;
+import org.opentripplanner.profile.StopCluster;
+import org.opentripplanner.profile.StopClusterMode;
+import org.opentripplanner.profile.StopNameNormalizer;
+import org.opentripplanner.profile.StopTreeCache;
+import org.opentripplanner.routing.alertpatch.AlertPatch;
+import org.opentripplanner.routing.algorithm.AStar;
+import org.opentripplanner.routing.algorithm.ExtendedTraverseVisitor;
+import org.opentripplanner.routing.algorithm.TraverseVisitor;
+import org.opentripplanner.routing.algorithm.strategies.SearchTerminationStrategy;
+import org.opentripplanner.routing.bike_park.BikePark;
+import org.opentripplanner.routing.bike_rental.BikeRentalStation;
+import org.opentripplanner.routing.car_park.CarPark;
+import org.opentripplanner.routing.core.Fare.FareType;
+import org.opentripplanner.routing.core.FareRuleSet;
+import org.opentripplanner.routing.core.RoutingRequest;
+import org.opentripplanner.routing.core.ServiceDay;
+import org.opentripplanner.routing.core.State;
+import org.opentripplanner.routing.core.TicketType;
+import org.opentripplanner.routing.core.TraverseMode;
+import org.opentripplanner.routing.edgetype.ParkAndRideLinkEdge;
+import org.opentripplanner.routing.edgetype.StreetBikeParkLink;
+import org.opentripplanner.routing.edgetype.TablePatternEdge;
+import org.opentripplanner.routing.edgetype.Timetable;
+import org.opentripplanner.routing.edgetype.TimetableSnapshot;
+import org.opentripplanner.routing.edgetype.TripPattern;
+import org.opentripplanner.routing.impl.DefaultFareServiceImpl;
+import org.opentripplanner.routing.services.AlertPatchService;
+import org.opentripplanner.routing.services.FareService;
+import org.opentripplanner.routing.spt.DominanceFunction;
+import org.opentripplanner.routing.spt.ShortestPathTree;
+import org.opentripplanner.routing.trippattern.FrequencyEntry;
+import org.opentripplanner.routing.trippattern.RealTimeState;
+import org.opentripplanner.routing.trippattern.TripTimes;
+import org.opentripplanner.routing.vertextype.BikeParkVertex;
+import org.opentripplanner.routing.vertextype.BikeRentalStationVertex;
+import org.opentripplanner.routing.vertextype.ParkAndRideVertex;
+import org.opentripplanner.routing.vertextype.TransitStation;
+import org.opentripplanner.routing.vertextype.TransitStop;
+import org.opentripplanner.standalone.Router;
+import org.opentripplanner.updater.alerts.GtfsRealtimeAlertsUpdater;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * This class contains all the transient indexes of graph elements -- those that are not
@@ -864,6 +904,7 @@ public class GraphIndex {
 
     public String replaceDays(String days) {
         String match = "ETKNRLP";
+        System.out.println(days);
         if (match.contains(days) && days.length() > 2) {
             char[] chars = days.toCharArray();
             return chars[0] + "-" + chars[days.length() - 1];
@@ -872,20 +913,21 @@ public class GraphIndex {
         }
     }
 
-    private void addTripTimeToTripTimesByStopNameList(List<TripTimesByStopName> tripTimesByStopNames, TripTimeShort tripTimeShort, Stop stop, Set<ServiceDate> serviceDates) {
+    private void addTripTimeToTripTimesByStopNameList(List<TripTimesByWeekdays> tripTimesByWeekdays, TripTimeShort tripTime, Stop stop, Set<ServiceDate> serviceDates) {
         String weekdays = replaceDays(serviceDates.stream().sorted(Comparator.comparingInt(ServiceDate::getDay))
                 .map(serviceDate -> getDayName(serviceDate.getDay()))
                 .filter(s -> !s.isEmpty())
                 .distinct()
                 .collect(Collectors.joining()));
+        System.out.println(weekdays);
 
-        Optional<TripTimesByStopName> tripTimesByStopName = tripTimesByStopNames.stream()
-                .filter(tripTimesByWeekdays1 -> tripTimesByWeekdays1.stopName.equals(stop.getName())).findFirst();
+        Optional<TripTimesByWeekdays> optionalTripTimesByWeekdays = tripTimesByWeekdays.stream()
+                .filter(tripTimesByWeekdays1 -> tripTimesByWeekdays1.weekdays.equals(weekdays)).findFirst();
 
-        if (!tripTimesByStopName.isPresent()) {//if none with said stop name exist
-            tripTimesByStopNames.add(new TripTimesByStopName(stop.getName(), tripTimeShort, weekdays));
+        if (!optionalTripTimesByWeekdays.isPresent()) {//if none with said weekdays exist
+            tripTimesByWeekdays.add(new TripTimesByWeekdays(weekdays));
         } else {
-            tripTimesByStopName.get().addWeekdaysTrip(tripTimeShort, stop, weekdays);
+            optionalTripTimesByWeekdays.get().addTripTimeByWeekdays(tripTime, stop, weekdays);
         }
 
 //        String[] scores = new String[tripTimesByStopNames.size()];
@@ -903,11 +945,14 @@ public class GraphIndex {
 //        }
     }
 
-    public List<TripTimesByStopName> tripTimesByStopNameAndWeekdays(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
+    public List<TripTimesByWeekdays> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
         if (pattern == null) {
             return null;
         }
-        List<TripTimesByStopName> tripTimesByWeekdays = new ArrayList<>();
+        List<TripTimesByWeekdays> tripTimesByWeekdays = new ArrayList<>();
+
+        System.out.println(pattern.getTrips());
+        System.out.println(pattern.getServices());
 
         Timetable tt = pattern.scheduledTimetable;
         int sidx = 0;
@@ -926,32 +971,6 @@ public class GraphIndex {
         }
 
         return tripTimesByWeekdays;
-    }
-
-    public List<String> tripTimesWeekdaysGroups(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
-        if (pattern == null) {
-            return null;
-        }
-        List<String> tripTimesWeekdaysGroups = new ArrayList<>();
-
-        Timetable tt = pattern.scheduledTimetable;
-        int sidx = 0;
-        for (Stop currStop : pattern.stopPattern.stops) {
-            if (omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE) continue;
-            for (TripTimes t : tt.tripTimes) {
-                if (omitCanceled && t.isTimeCanceled(sidx)) continue;
-                String weekdays = replaceDays(graph.getCalendarService().getServiceDatesForServiceId(t.trip.getServiceId())
-                        .stream().sorted(Comparator.comparingInt(ServiceDate::getDay))
-                        .map(serviceDate -> getDayName(serviceDate.getDay()))
-                        .filter(s -> !s.isEmpty())
-                        .distinct()
-                        .collect(Collectors.joining()));
-                tripTimesWeekdaysGroups.add(weekdays);
-            }
-            sidx++;
-        }
-
-        return tripTimesWeekdaysGroups.stream().distinct().collect(toList());
     }
 
     /**
