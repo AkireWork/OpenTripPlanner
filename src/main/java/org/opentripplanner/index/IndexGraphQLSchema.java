@@ -17,7 +17,7 @@ import org.opentripplanner.common.model.P2;
 import org.opentripplanner.gtfs.GtfsLibrary;
 import org.opentripplanner.index.model.StopTimesInPattern;
 import org.opentripplanner.index.model.TripTimeShort;
-import org.opentripplanner.index.model.TripTimesByWeekdays;
+import org.opentripplanner.index.model.TripTimesByStopName;
 import org.opentripplanner.model.*;
 import org.opentripplanner.model.calendar.ServiceDate;
 import org.opentripplanner.profile.StopCluster;
@@ -263,9 +263,9 @@ public class IndexGraphQLSchema {
 
     public GraphQLOutputType planType = new GraphQLTypeReference("Plan");
 
-    public GraphQLOutputType tripTimesByWeekdaysType;
+    public GraphQLOutputType tripTimesByStopName;
 
-    public GraphQLOutputType tripTimesByStopType;
+    public GraphQLOutputType weekdaysTripsType;
 
     public GraphQLSchema indexSchema;
 
@@ -1263,33 +1263,33 @@ public class IndexGraphQLSchema {
                         .build())
                 .build();
 
-        tripTimesByStopType = GraphQLObjectType.newObject()
-                .name("TripTimesByStop")
-                .description("Trips stoptimes by stopName")
-                .field(GraphQLFieldDefinition.newFieldDefinition()
-                        .name("stopName")
-                        .type(new GraphQLNonNull(Scalars.GraphQLString))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.TripTimesByStop) environment.getSource()).stopName)
-                        .build())
-                .field(GraphQLFieldDefinition.newFieldDefinition()
-                        .name("tripTimeShortList")
-                        .type(new GraphQLList(stoptimeType))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.TripTimesByStop) environment.getSource()).tripTimeShortList)
-                        .build())
-                .build();
-
-        tripTimesByWeekdaysType = GraphQLObjectType.newObject()
-                .name("TripTimesByWeekdays")
-                .description("TripTimes by stop names for week grouped by weekdays")
+        weekdaysTripsType = GraphQLObjectType.newObject()
+                .name("WeekdaysTrips")
+                .description("Triptimes by weekdays")
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("weekdays")
                         .type(new GraphQLNonNull(Scalars.GraphQLString))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).weekdays)
+                        .dataFetcher(environment -> ((TripTimesByStopName.WeekdaysTrip) environment.getSource()).weekdays)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
-                        .name("tripTimesByStops")
-                        .type(new GraphQLList(tripTimesByStopType))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).tripTimesByStops)
+                        .name("tripTimeShort")
+                        .type(new GraphQLNonNull(stoptimeType))
+                        .dataFetcher(environment -> ((TripTimesByStopName.WeekdaysTrip) environment.getSource()).tripTimeShort)
+                        .build())
+                .build();
+
+        tripTimesByStopName = GraphQLObjectType.newObject()
+                .name("TripTimesByStopName")
+                .description("TripTimes by stop names for week grouped by weekdays")
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("stopName")
+                        .type(new GraphQLNonNull(Scalars.GraphQLString))
+                        .dataFetcher(environment -> ((TripTimesByStopName) environment.getSource()).stopName)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("weekdaysTrips")
+                        .type(new GraphQLList(weekdaysTripsType))
+                        .dataFetcher(environment -> ((TripTimesByStopName) environment.getSource()).weekdaysTrips)
                         .build())
                 .build();
 
@@ -2045,7 +2045,7 @@ public class IndexGraphQLSchema {
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("stoptimesForWeek")
-                        .type(new GraphQLList(tripTimesByWeekdaysType))
+                        .type(new GraphQLList(tripTimesByStopName))
                         .argument(GraphQLArgument.newArgument()
                                 .name("omitNonPickups")
                                 .description("If true, only those departures which allow boarding are returned")
@@ -2064,7 +2064,31 @@ public class IndexGraphQLSchema {
                             boolean omitNonPickups = environment.getArgument("omitNonPickups");
                             boolean omitCanceled = environment.getArgument("omitCanceled");
 
-                            return index.tripTimesByStopNamesForWeek(tripPattern, omitNonPickups, omitCanceled);
+                            return index.tripTimesByStopNameAndWeekdays(tripPattern, omitNonPickups, omitCanceled);
+                        })
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("tripTimesWeekdaysGroups")
+                        .type(new GraphQLList(Scalars.GraphQLString))
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitNonPickups")
+                                .description("If true, only those departures which allow boarding are returned")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(false)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitCanceled")
+                                .description("If false, returns also canceled trips")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(false)
+                                .build())
+                        .dataFetcher(environment -> {
+                            Trip trip = environment.getSource();
+                            TripPattern tripPattern = index.patternForTrip.get(trip);
+                            boolean omitNonPickups = environment.getArgument("omitNonPickups");
+                            boolean omitCanceled = environment.getArgument("omitCanceled");
+
+                            return index.tripTimesWeekdaysGroups(tripPattern, omitNonPickups, omitCanceled);
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
