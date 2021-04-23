@@ -16,6 +16,8 @@ import org.opentripplanner.routing.edgetype.TransitBoardAlight;
 import org.opentripplanner.routing.error.PathNotFoundException;
 import org.opentripplanner.routing.error.SearchTimeoutException;
 import org.opentripplanner.routing.error.VertexNotFoundException;
+import org.opentripplanner.routing.flex.DeviatedRouteGraphModifier;
+import org.opentripplanner.routing.flex.FlagStopGraphModifier;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.graph.Vertex;
 import org.opentripplanner.routing.spt.DominanceFunction;
@@ -133,6 +135,19 @@ public class GraphPathFinder {
          */
         if (options.maxWalkDistance == Double.MAX_VALUE) options.maxWalkDistance = DEFAULT_MAX_WALK;
         if (options.maxWalkDistance > CLAMP_MAX_WALK) options.maxWalkDistance = CLAMP_MAX_WALK;
+        if (options.modes.isTransit() && router.graph.useFlexService) {
+            // create temporary flex stops/hops (just once even if we run multiple searches)
+            FlagStopGraphModifier flagStopGraphModifier = new FlagStopGraphModifier(router.graph);
+            DeviatedRouteGraphModifier deviatedRouteGraphModifier = new DeviatedRouteGraphModifier(router.graph);
+            flagStopGraphModifier.createForwardHops(options);
+            if (options.flexUseReservationServices) {
+                deviatedRouteGraphModifier.createForwardHops(options);
+            }
+            flagStopGraphModifier.createBackwardHops(options);
+            if (options.flexUseReservationServices) {
+                deviatedRouteGraphModifier.createBackwardHops(options);
+            }
+        }
         long searchBeginTime = System.currentTimeMillis();
         LOG.debug("BEGIN SEARCH");
         List<GraphPath> paths = Lists.newArrayList();
@@ -167,7 +182,7 @@ public class GraphPathFinder {
                 try {
                     newPaths = compactLegsByReversedSearch(aStar, originalReq, options, newPaths, timeout, reversedSearchHeuristic);
                 } catch (Exception e) {
-                    LOG.warn("CompactLegsByReversedSearch failed on request: " + originalReq.toString());
+                    LOG.debug("CompactLegsByReversedSearch failed on request: " + originalReq.toString());
                 }
             }
 
@@ -175,12 +190,27 @@ public class GraphPathFinder {
             for (GraphPath path : newPaths) {
                 // path.dump();
                 List<FeedScopedId> tripIds = path.getTrips();
+                List<FeedScopedId> callAndRideTripIds = path.getCallAndRideTrips();
                 for (FeedScopedId tripId : tripIds) {
-                    options.banTrip(tripId);
+                    if (!callAndRideTripIds.contains(tripId)) {
+                        options.banTrip(tripId);
+                    }
                 }
                 if (tripIds.isEmpty()) {
                     // This path does not use transit (is entirely on-street). Do not repeatedly find the same one.
                     options.onlyTransitTrips = true;
+                }
+                // Call-and-Ride trips should not use regular trip-banning, since call-and-ride trips can beused in
+                // multiple ways (e.g. from origin to destination, or from origin to a transfer stop.) Instead,
+                // after an itinerary which uses call-and-ride is found, reduce the allowable call-and-ride duration
+                // so that the same leg cannot be found in a subsequent search.
+                if (tripIds.size() < 2) {
+                    int duration = path.getCallAndRideDuration();
+                    if (duration > 0) { // only true if there are call-and-ride legs
+                        int constantLimit = Math.min(0, duration - options.flexReduceCallAndRideSeconds);
+                        int ratioLimit = (int) Math.round(options.flexReduceCallAndRideRatio * duration);
+                        options.flexMaxCallAndRideSeconds = Math.min(constantLimit, ratioLimit);
+                    }
                 }
             }
 
@@ -193,6 +223,7 @@ public class GraphPathFinder {
                             : path.getDuration();
                         return duration < options.maxHours * 60 * 60;
                     })
+                    .filter(path -> isPathValidForRequest(options, path))
                     .collect(Collectors.toList()));
 
             LOG.debug("we have {} paths", paths.size());
@@ -369,16 +400,8 @@ public class GraphPathFinder {
             while (gpi.hasNext()) {
                 GraphPath graphPath = gpi.next();
                 // TODO check, is it possible that arriveBy and time are modifed in-place by the search?
-                if (request.arriveBy) {
-                    if (graphPath.states.getLast().getTimeSeconds() > request.dateTime) {
-                        LOG.error("A graph path arrives after the requested time. This implies a bug.");
-                        gpi.remove();
-                    }
-                } else {
-                    if (graphPath.states.getFirst().getTimeSeconds() < request.dateTime) {
-                        LOG.error("A graph path leaves before the requested time. This implies a bug.");
-                        gpi.remove();
-                    }
+                if (!isPathValidForRequest(request, graphPath)) {
+                    gpi.remove();
                 }
             }
         }
@@ -395,6 +418,21 @@ public class GraphPathFinder {
         }
 
         return paths;
+    }
+
+    private boolean isPathValidForRequest(RoutingRequest request, GraphPath graphPath) {
+        if (request.arriveBy) {
+            if (graphPath.states.getLast().getTimeSeconds() > request.dateTime) {
+                LOG.error("A graph path arrives after the requested time. This implies a bug.");
+                return false;
+            }
+        } else {
+            if (graphPath.states.getFirst().getTimeSeconds() < request.dateTime) {
+                LOG.error("A graph path leaves before the requested time. This implies a bug.");
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -416,12 +454,10 @@ public class GraphPathFinder {
             List <GraphPath> completePaths = new ArrayList<>();
             DebugOutput debugOutput = null;
 
-            Vertex[] fromVertices = new Vertex[places.size()];
-            Vertex[] toVertices = new Vertex[places.size()];
-
             OUTER: for (int i = 0; i < request.numItineraries; i++) {
                 List<GraphPath> paths = new ArrayList<>();
                 int placeIndex = (request.arriveBy ? places.size() - 1 : 1);
+                Collection<Vertex> temporaryVertices = new ArrayList<>();
 
                 while (0 < placeIndex && placeIndex < places.size()) {
                     GenericLocation currentPlace = places.get(placeIndex - 1);
@@ -431,25 +467,7 @@ public class GraphPathFinder {
                     intermediateRequest.from = currentPlace;
                     intermediateRequest.to = places.get(placeIndex);
                     intermediateRequest.rctx = null;
-
-                    if ( fromVertices[placeIndex - 1] != null && toVertices[placeIndex] != null ) {
-                        intermediateRequest.setRoutingContext(
-                            router.graph,
-                            fromVertices[placeIndex - 1],
-                            toVertices[placeIndex]
-                        );
-                    } else {
-                        intermediateRequest.setRoutingContext(router.graph);
-                    }
-
-                    // Need to save used vertices, so we won't get a TrivialPathException later.
-                    if (fromVertices[placeIndex - 1] == null) {
-                        fromVertices[placeIndex -1] = intermediateRequest.rctx.fromVertex;
-                    }
-
-                    if (toVertices[placeIndex] == null) {
-                        toVertices[placeIndex] = intermediateRequest.rctx.toVertex;
-                    }
+                    intermediateRequest.setRoutingContext(router.graph, temporaryVertices);
 
                     if (debugOutput != null) {// Restore the previous debug info accumulator
                         intermediateRequest.rctx.debugOutput = debugOutput;
@@ -520,7 +538,7 @@ public class GraphPathFinder {
             for (Edge e : path.edges) {
                 lastState = e.traverse(lastState);
                 if (lastState==null){
-                    LOG.warn("About to add null lastState to newPath. This may cause nullPointer in next iteration? Caused by traversing edge: " + e);
+                    LOG.debug("About to add null lastState to newPath. This may cause nullPointer in next iteration? Caused by traversing edge: " + e);
                 }
                 newPath.edges.add(e);
                 newPath.states.add(lastState);

@@ -13,7 +13,7 @@ import org.opentripplanner.routing.graph.Vertex;
 import org.opentripplanner.routing.vertextype.BikeRentalStationVertex;
 
 import com.google.common.collect.Sets;
-import com.vividsolutions.jts.geom.LineString;
+import org.locationtech.jts.geom.LineString;
 
 /**
  * Renting or dropping off a rented bike edge.
@@ -50,11 +50,19 @@ public abstract class RentABikeAbstractEdge extends Edge {
          */
         if (noBikeRentalNetworkAllowed(options.allowedBikeRentalNetworks))
             return null;
-        
+
         BikeRentalStationVertex dropoff = (BikeRentalStationVertex) tov;
+
+        /*
+         * Can't rent a bike from a station that is not on
+         */
+        if (!dropoff.isStationOn()) {
+            return null;
+        }
+
         if (options.useBikeRentalAvailabilityInformation && dropoff.getBikesAvailable() == 0)
             return null;
-        
+
         StateEditor editor = state.edit(this);
         editor.incrementWeight(options.arriveBy ? options.bikeRentalDropoffCost : options.bikeRentalPickupCost);
         editor.incrementTimeInSeconds(options.arriveBy ? options.bikeRentalDropoffTime : options.bikeRentalPickupTime);
@@ -92,7 +100,15 @@ public abstract class RentABikeAbstractEdge extends Edge {
             return null;
         
         BikeRentalStationVertex pickup = (BikeRentalStationVertex) tov;
-        if (options.useBikeRentalAvailabilityInformation && pickup.getSpacesAvailable() == 0)
+
+        /*
+         * Can't return a bike to a station that is not on
+         */
+        if (!pickup.isStationOn()) {
+            return null;
+        }
+
+        if (options.useBikeRentalAvailabilityInformation && pickup.getSpacesAvailable() == 0  && !pickup.getAllowOverloading())
             return null;
         
         StateEditor editor = state.edit(this);

@@ -1,9 +1,9 @@
 package org.opentripplanner.index;
 
 import com.google.transit.realtime.GtfsRealtime;
-import com.vividsolutions.jts.geom.Coordinate;
-import com.vividsolutions.jts.geom.Envelope;
-import com.vividsolutions.jts.geom.LineString;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Envelope;
+import org.locationtech.jts.geom.LineString;
 import graphql.Scalars;
 import graphql.language.StringValue;
 import graphql.relay.Relay;
@@ -368,18 +368,6 @@ public class IndexGraphQLSchema {
                     .build())
             .build();
 
-
-    private Agency getAgency(GraphIndex index, String agencyId) {
-        //xxx what if there are duplciate agency ids?
-        //now we return the first
-        for (Map<String, Agency> feedAgencies : index.agenciesForFeedId.values()) {
-            if (feedAgencies.get(agencyId) != null) {
-                return feedAgencies.get(agencyId);
-            }
-        }
-        return null;
-    }
-
     @SuppressWarnings("unchecked")
     public IndexGraphQLSchema(GraphIndex index) {
         createPlanType(index);
@@ -612,6 +600,11 @@ public class IndexGraphQLSchema {
                         .name("maxPreTransitTime")
                         .description("The maximum time (in seconds) of pre-transit travel when using drive-to-transit (park and ride or kiss and ride). Default value: 1800.")
                         .type(Scalars.GraphQLInt)
+                        .build())
+                .argument(GraphQLArgument.newArgument()
+                        .name("maxSlope")
+                        .description("The maximum slope, up or downhill, that can be used in wheelchair accessible routing. Value is between 0 and 1, and calculated by dividing change of elevation by change of distance. Default value: 0.0833333333333")
+                        .type(Scalars.GraphQLFloat)
                         .build())
                 .argument(GraphQLArgument.newArgument()
                         .name("carParkCarLegWeight")
@@ -878,7 +871,10 @@ public class IndexGraphQLSchema {
                         .name("agency")
                         .description("Agency affected by the disruption. Note that this value is present only if the disruption has an effect on all operations of the agency (e.g. in case of a strike).")
                         .type(agencyType)
-                        .dataFetcher(environment -> getAgency(index, ((AlertPatch) environment.getSource()).getAgency()))
+                        .dataFetcher(environment -> {
+                            AlertPatch patch = (AlertPatch) environment.getSource();
+                            return index.getAgencyWithFeedScopeId(patch.getFeedId() + ":" + patch.getAgency());
+                        })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("route")
@@ -1715,6 +1711,13 @@ public class IndexGraphQLSchema {
                         .type(Scalars.GraphQLString)
                         .dataFetcher(environment -> ((TripTimeShort) environment.getSource()).headsign)
                         .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("stopSequence")
+                        .description("The sequence number of the stop")
+                        .type(Scalars.GraphQLInt)
+                        .dataFetcher(
+                                environment -> ((TripTimeShort) environment.getSource()).stopSequence)
+                        .build())
                 .build();
 
         tripType = GraphQLObjectType.newObject()
@@ -2245,7 +2248,7 @@ public class IndexGraphQLSchema {
                         .description("Global object ID provided by Relay. This value can be used to refetch this object using **node** query.")
                         .type(new GraphQLNonNull(Scalars.GraphQLID))
                         .dataFetcher(environment -> relay
-                                .toGlobalId(agencyType.getName(), ((Agency) environment.getSource()).getId()))
+                                .toGlobalId(agencyType.getName(), environment.<Agency>getSource().getFeedScopeId().toString()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("gtfsId")
@@ -2326,15 +2329,21 @@ public class IndexGraphQLSchema {
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("bikesAvailable")
-                        .description("Number of bikes currently available on the rental station. The total capacity of this bike rental station is the sum of fields `bikesAvailable` and `spacesAvailable`.")
+                        .description("Number of bikes currently available on the rental station.")
                         .type(Scalars.GraphQLInt)
                         .dataFetcher(environment -> ((BikeRentalStation) environment.getSource()).bikesAvailable)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("spacesAvailable")
-                        .description("Number of free spaces currently available on the rental station. The total capacity of this bike rental station is the sum of fields `bikesAvailable` and `spacesAvailable`.  \n Note that this value being 0 does not necessarily indicate that bikes cannot be returned to this station, as it might be possible to leave the bike in the vicinity of the rental station, even if the bike racks don't have any spaces available (see field `allowDropoff`).")
+                        .description("Number of free spaces currently available on the rental station.  \n Note that this value being 0 does not necessarily indicate that bikes cannot be returned to this station, as it might be possible to leave the bike in the vicinity of the rental station, even if the bike racks don't have any spaces available (see field `allowDropoff`).")
                         .type(Scalars.GraphQLInt)
                         .dataFetcher(environment -> ((BikeRentalStation) environment.getSource()).spacesAvailable)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("capacity")
+                        .description("Nominal capacity (number of racks) of the rental station.")
+                        .type(Scalars.GraphQLInt)
+                        .dataFetcher(environment -> ((BikeRentalStation) environment.getSource()).capacity)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("state")
@@ -2353,6 +2362,24 @@ public class IndexGraphQLSchema {
                         .description("If true, bikes can be returned to this station.")
                         .type(Scalars.GraphQLBoolean)
                         .dataFetcher(environment -> ((BikeRentalStation) environment.getSource()).allowDropoff)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("allowOverloading")
+                        .description("If true, bikes can be returned even if spacesAvailable is zero or bikes > capacity.")
+                        .type(Scalars.GraphQLBoolean)
+                        .dataFetcher(environment -> ((BikeRentalStation) environment.getSource()).allowOverloading)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("isFloatingBike")
+                        .description("If true, this is a free floating bike.")
+                        .type(Scalars.GraphQLBoolean)
+                        .dataFetcher(environment -> ((BikeRentalStation) environment.getSource()).isFloatingBike)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("isCarStation")
+                        .description("If true, this is a car rental system station.")
+                        .type(Scalars.GraphQLBoolean)
+                        .dataFetcher(environment -> ((BikeRentalStation) environment.getSource()).isCarStation)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("networks")
@@ -2590,7 +2617,7 @@ public class IndexGraphQLSchema {
                     return index.patternForId.get(id.id);
                 }
                 if (id.type.equals(agencyType.getName())) {
-                    return index.getAgencyWithoutFeedId(id.id);
+                    return index.getAgencyWithFeedScopeId(id.id);
                 }
                 if (id.type.equals(alertType.getName())) {
                     return index.getAlertForId(id.id);
@@ -2685,9 +2712,19 @@ public class IndexGraphQLSchema {
                                 .type(new GraphQLList(Scalars.GraphQLString))
                                 .build())
                         .argument(GraphQLArgument.newArgument()
+                                .name("feeds")
+                                .description("List of feeds from which stops are returned. Defaults to all feeds")
+                                .type(GraphQLList.list(GraphQLNonNull.nonNull(Scalars.GraphQLString)))
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
                                 .name("name")
                                 .description("Query stops by this name")
                                 .type(Scalars.GraphQLString)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("maxResults")
+                                .description("Number of results to return when using `name` argument. Defaults to 10")
+                                .type(Scalars.GraphQLInt)
                                 .build())
                         .dataFetcher(environment -> {
                             if ((environment.getArgument("ids") instanceof List)) {
@@ -2705,9 +2742,17 @@ public class IndexGraphQLSchema {
                             }
                             Stream<Stop> stream;
                             if (environment.getArgument("name") == null) {
-                                stream = index.stopForId.values().stream();
+                                if (environment.getArgument("feeds") == null) {
+                                    stream = index.stopForId.values().stream();
+                                } else {
+                                    List<String> feedIds = environment.getArgument("feeds");
+                                    stream = index.stopForId.values().stream().filter(stop -> feedIds.contains(stop.getId().getAgencyId()));
+                                }
                             } else {
-                                stream = index.getLuceneIndex().query(environment.getArgument("name"), true, true, false, false)
+                                int maxResults = environment.getArgument("maxResults") != null ? environment.getArgument("maxResults") : 10;
+                                List<String> feeds = environment.getArgument("feeds");
+
+                                stream = index.getLuceneIndex().query(environment.getArgument("name"), true, true, false, false, false, maxResults, feeds)
                                         .stream()
                                         .map(result -> index.stopForId.get(FeedScopedId.convertFromString(result.id)));
                             }
@@ -2941,9 +2986,19 @@ public class IndexGraphQLSchema {
                                 .type(new GraphQLList(Scalars.GraphQLString))
                                 .build())
                         .argument(GraphQLArgument.newArgument()
+                                .name("feeds")
+                                .description("List of feeds from which stations are returned. Defaults to all feeds")
+                                .type(GraphQLList.list(GraphQLNonNull.nonNull(Scalars.GraphQLString)))
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
                                 .name("name")
                                 .description("Query stations by name")
                                 .type(Scalars.GraphQLString)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("maxResults")
+                                .description("Number of results to return when using `name` argument. Defaults to 10")
+                                .type(Scalars.GraphQLInt)
                                 .build())
                         .dataFetcher(environment -> {
                             if ((environment.getArgument("ids") instanceof List)) {
@@ -2962,9 +3017,17 @@ public class IndexGraphQLSchema {
 
                             Stream<Stop> stream;
                             if (environment.getArgument("name") == null) {
-                                stream = index.stationForId.values().stream();
+                                if (environment.getArgument("feeds") == null) {
+                                    stream = index.stationForId.values().stream();
+                                } else {
+                                    List<String> feedIds = environment.getArgument("feeds");
+                                    stream = index.stationForId.values().stream().filter(station -> feedIds.contains(station.getId().getAgencyId()));
+                                }
                             } else {
-                                stream = index.getLuceneIndex().query(environment.getArgument("name"), true, false, true, false, false)
+                                int maxResults = environment.getArgument("maxResults") != null ? environment.getArgument("maxResults") : 10;
+                                List<String> feeds = environment.getArgument("feeds");
+
+                                stream = index.getLuceneIndex().query(environment.getArgument("name"), true, false, true, false, false, maxResults, feeds)
                                         .stream()
                                         .map(result -> index.stationForId.get(FeedScopedId.convertFromString(result.id)));
                             }
@@ -2979,6 +3042,11 @@ public class IndexGraphQLSchema {
                         .argument(GraphQLArgument.newArgument()
                                 .name("ids")
                                 .description("Only return routes with these ids")
+                                .type(new GraphQLList(Scalars.GraphQLString))
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("feeds")
+                                .description("Only return routes with these feedIds")
                                 .type(new GraphQLList(Scalars.GraphQLString))
                                 .build())
                         .argument(GraphQLArgument.newArgument()
@@ -3011,6 +3079,12 @@ public class IndexGraphQLSchema {
                                         .collect(Collectors.toList());
                             }
                             Stream<Route> stream = index.routeForId.values().stream();
+                            if (environment.getArgument("feeds") instanceof List) {
+                                stream = stream
+                                        .filter(route -> ((List<String>) environment.getArgument("feeds")).contains(
+                                                route.getId().getAgencyId())
+                                        );
+                            }
                             if (environment.getArgument("name") != null) {
                                 stream = stream
                                         .filter(route -> route.getShortName() != null)
@@ -3052,7 +3126,21 @@ public class IndexGraphQLSchema {
                         .name("trips")
                         .description("Get all trips")
                         .type(new GraphQLList(tripType))
-                        .dataFetcher(environment -> new ArrayList<>(index.tripForId.values()))
+                        .argument(GraphQLArgument.newArgument()
+                                .name("feeds")
+                                .description("Only return trips with these feedIds")
+                                .type(new GraphQLList(Scalars.GraphQLString))
+                                .build())
+                        .dataFetcher(environment -> {
+                                Stream<Trip> stream = index.tripForId.values().stream();
+                                if (environment.getArgument("feeds") instanceof List) {
+                                        stream = stream
+                                                .filter(trip -> ((List<String>) environment.getArgument("feeds")).contains(
+                                                        trip.getId().getAgencyId())
+                                        );
+                                }
+                                return stream.collect(Collectors.toList());
+                        })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("trip")
@@ -3330,12 +3418,24 @@ public class IndexGraphQLSchema {
                                 .description("Only return alerts with these causes")
                                 .type(new GraphQLList(new GraphQLNonNull(alertCauseEnum)))
                                 .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("route")
+                                .description("Only return alerts affecting these routes")
+                                .type(new GraphQLList(new GraphQLNonNull(Scalars.GraphQLString)))
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("stop")
+                                .description("Only return alerts affecting these stops")
+                                .type(new GraphQLList(new GraphQLNonNull(Scalars.GraphQLString)))
+                                .build())
                         .dataFetcher(environment -> {
                             return index.getAlerts().stream()
                                     .filter(alert -> environment.getArgument("feeds") == null || ((List)environment.getArgument("feeds")).contains(alert.getFeedId()))
                                     .filter(alert -> environment.getArgument("severityLevel") == null || ((List)environment.getArgument("severityLevel")).contains(alert.getAlert().severityLevel))
                                     .filter(alert -> environment.getArgument("effect") == null || ((List)environment.getArgument("effect")).contains(alert.getAlert().effect))
                                     .filter(alert -> environment.getArgument("cause") == null || ((List)environment.getArgument("cause")).contains(alert.getAlert().cause))
+                                    .filter(alert -> environment.getArgument("route") == null || (alert.getRoute() != null && ((List)environment.getArgument("route")).contains(FeedScopedId.convertToString(alert.getRoute()))))
+                                    .filter(alert -> environment.getArgument("stop") == null || (alert.getStop() != null && ((List)environment.getArgument("stop")).contains(FeedScopedId.convertToString(alert.getStop()))))
                                     .collect(Collectors.toList());
                         })
                         .build())
@@ -3349,10 +3449,28 @@ public class IndexGraphQLSchema {
                         .name("bikeRentalStations")
                         .description("Get all bike rental stations")
                         .type(new GraphQLList(bikeRentalStationType))
-                        .dataFetcher(dataFetchingEnvironment -> new ArrayList<>(
-                                index.graph.getService(BikeRentalStationService.class) != null
+                        .argument(GraphQLArgument.newArgument()
+                                .name("ids")
+                                .description("Return bike rental stations with these ids.  \n **Note:** if an id is invalid (or the bike rental station service is unavailable) the returned list will contain `null` values.")
+                                .type(new GraphQLList(Scalars.GraphQLString))
+                                .build())
+                        .dataFetcher(environment -> {
+                                if ((environment.getArgument("ids") instanceof List)) {
+                                        Map<String, BikeRentalStation> rentalStations =
+                                                index.graph.getService(BikeRentalStationService.class) != null
+                                                ? index.graph.getService(BikeRentalStationService.class).getBikeRentalStations()
+                                                        .stream()
+                                                        .collect(Collectors.toMap(station -> station.id, station ->  station))
+                                                : Collections.EMPTY_MAP;
+                                        return ((List<String>) environment.getArgument("ids"))
+                                                .stream()
+                                                .map(rentalStations::get)
+                                                .collect(Collectors.toList());
+                                }
+                                return new ArrayList<>(index.graph.getService(BikeRentalStationService.class) != null
                                         ? index.graph.getService(BikeRentalStationService.class).getBikeRentalStations()
-                                        : Collections.EMPTY_LIST))
+                                        : Collections.EMPTY_LIST);
+                        })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("bikeRentalStation")
@@ -3526,6 +3644,12 @@ public class IndexGraphQLSchema {
                         .dataFetcher(environment -> ((Place) environment.getSource()).vertexType.equals(VertexType.TRANSIT) ? index.stopForId.get(((Place) environment.getSource()).stopId) : null)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("stopSequence")
+                        .description("For transit stops, the sequence number of the stop.")
+                        .type(Scalars.GraphQLInt)
+                        .dataFetcher(environment -> ((Place) environment.getSource()).vertexType.equals(VertexType.TRANSIT) ? ((Place) environment.getSource()).stopSequence : null)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("bikeRentalStation")
                         .type(bikeRentalStationType)
                         .description("The bike rental station related to the place")
@@ -3620,7 +3744,12 @@ public class IndexGraphQLSchema {
                         .name("agency")
                         .description("For transit legs, the transit agency that operates the service used for this leg. For non-transit legs, `null`.")
                         .type(agencyType)
-                        .dataFetcher(environment -> getAgency(index, ((Leg) environment.getSource()).agencyId))
+                        .dataFetcher(environment -> {
+                            Leg leg = environment.getSource();
+                            if(leg.routeId != null) {
+                                return index.getAgencyWithFeedScopeId(leg.routeId.getAgencyId() + ":" + leg.agencyId);
+                            } else return null;
+                        })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("realTime")
@@ -3681,6 +3810,12 @@ public class IndexGraphQLSchema {
                         .description("For transit legs, the service date of the trip. Format: YYYYMMDD. For non-transit legs, null.")
                         .type(Scalars.GraphQLString)
                         .dataFetcher(environment -> ((Leg) environment.getSource()).serviceDate)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("interlineWithPreviousLeg")
+                        .description("Interlines with previous leg. This is true when the same vehicle is used for the previous leg as for this leg and passenger can stay inside the vehicle.")
+                        .type(Scalars.GraphQLBoolean)
+                        .dataFetcher(environment -> ((Leg) environment.getSource()).interlineWithPreviousLeg)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("intermediateStops")

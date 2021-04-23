@@ -11,6 +11,7 @@ import org.opentripplanner.routing.edgetype.TripPattern;
 import org.opentripplanner.routing.graph.Edge;
 import org.opentripplanner.routing.graph.Vertex;
 import org.opentripplanner.routing.trippattern.TripTimes;
+import org.opentripplanner.routing.vertextype.TemporaryVertex;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -103,7 +104,13 @@ public class StateEditor {
 
         // if something was flagged incorrect, do not make a new state
         if (defectiveTraversal) {
-            LOG.error("Defective traversal flagged on edge " + child.backEdge);
+            LOG.debug("Defective traversal flagged on edge " + child.backEdge);
+            return null;
+        }
+
+        // Check TemporaryVertex on a different request
+        if ((getVertex() instanceof TemporaryVertex)
+            && !child.getOptions().rctx.temporaryVertices.contains(getVertex())) {
             return null;
         }
 
@@ -176,7 +183,7 @@ public class StateEditor {
 
     public void incrementWeight(double weight) {
         if (Double.isNaN(weight)) {
-            LOG.warn("A state's weight is being incremented by NaN while traversing edge "
+            LOG.debug("A state's weight is being incremented by NaN while traversing edge "
                     + child.backEdge);
             defectiveTraversal = true;
             return;
@@ -225,6 +232,15 @@ public class StateEditor {
             return;
         }
         child.preTransitTime += seconds;
+    }
+
+    public void incrementCallAndRideTime(int seconds) {
+        if (seconds < 0) {
+            LOG.warn("A state's call-n-ride time is being incremented by a negative amount.");
+            defectiveTraversal = true;
+            return;
+        }
+        child.callAndRideTime += seconds;
     }
 
     public void incrementNumBoardings() {
@@ -477,6 +493,10 @@ public class StateEditor {
         return child.getPreTransitTime();
     }
 
+    public int getCallAndRideTime() {
+        return child.getCallAndRideTime();
+    }
+
     public Vertex getVertex() {
         return child.getVertex();
     }
@@ -502,6 +522,12 @@ public class StateEditor {
         cloneStateDataAsNeeded();
         child.stateData.lastPattern = pattern;
     }
+
+    public void setIsLastBoardAlightDeviated(boolean isLastBoardAlightDeviated) {
+        cloneStateDataAsNeeded();
+        child.stateData.isLastBoardAlightDeviated = isLastBoardAlightDeviated;
+    }
+
     public void setOptions(RoutingRequest options) {
         cloneStateDataAsNeeded();
         child.stateData.opt = options;

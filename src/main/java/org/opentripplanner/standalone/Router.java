@@ -80,8 +80,6 @@ public class Router {
      */
     public void startup(JsonNode config) {
 
-        this.tileRendererManager = new TileRendererManager(this.graph);
-
         // Analyst Modules FIXME make these optional based on JSON?
         {
             this.tileCache = new TileCache(this.graph);
@@ -100,6 +98,8 @@ public class Router {
             LOG.info("No default routing parameters were found in the router config JSON. Using built-in OTP defaults.");
             this.defaultRoutingRequest = new RoutingRequest();
         }
+
+        this.tileRendererManager = new TileRendererManager(this.graph, this.defaultRoutingRequest);
 
         /* Apply single timeout. */
         JsonNode timeout = config.get("timeout");
@@ -172,6 +172,11 @@ public class Router {
                 RoutePreferencesSource.fromConfig(routePreferenceSettingsName).setRoutePreferences(
                         this.defaultRoutingRequest, this.graph);
             }
+        }
+        /* Set whether to use flex service */
+        JsonNode useFlexService = config.get("useFlexService");
+        if (useFlexService != null) {
+            graph.setUseFlexService(useFlexService.asBoolean(false));
         }
 
         /* Create Graph updater modules from JSON config. */
