@@ -47,6 +47,7 @@ class RouteMapper {
         lhs.setBikesAllowed(rhs.getBikesAllowed());
         lhs.setSortOrder(rhs.getSortOrder());
         lhs.setBrandingUrl(rhs.getBrandingUrl());
+        lhs.setEligibilityRestricted(rhs.getEligibilityRestricted());
         if (extension != null) {
             Map<String, String> authorities = COMPETENT_AUTHORITY_TABLE.getAuthorities();
             lhs.setCompetentAuthority(authorities.getOrDefault(extension.getCompetentAuthority(), ""));

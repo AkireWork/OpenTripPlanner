@@ -44,6 +44,13 @@ class TripMapper {
         lhs.setTripBikesAllowed(rhs.getTripBikesAllowed());
         lhs.setBikesAllowed(rhs.getBikesAllowed());
         lhs.setFareId(rhs.getFareId());
+        lhs.setDrtMaxTravelTime(rhs.getDrtMaxTravelTime());
+        lhs.setDrtAvgTravelTime(rhs.getDrtAvgTravelTime());
+        lhs.setDrtAdvanceBookMin(rhs.getDrtAdvanceBookMin());
+        lhs.setDrtPickupMessage(rhs.getDrtPickupMessage());
+        lhs.setDrtDropOffMessage(rhs.getDrtDropOffMessage());
+        lhs.setContinuousPickupMessage(rhs.getContinuousPickupMessage());
+        lhs.setContinuousDropOffMessage(rhs.getContinuousDropOffMessage());
         if (extension != null) {
             lhs.setTripLongName(extension.getTripLongName());
         }

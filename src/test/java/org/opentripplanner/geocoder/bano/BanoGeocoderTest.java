@@ -6,7 +6,7 @@ import org.opentripplanner.common.geometry.SphericalDistanceLibrary;
 import org.opentripplanner.geocoder.GeocoderResult;
 import org.opentripplanner.geocoder.GeocoderResults;
 
-import com.vividsolutions.jts.geom.Envelope;
+import org.locationtech.jts.geom.Envelope;
 
 public class BanoGeocoderTest {
 
@@ -29,9 +29,9 @@ public class BanoGeocoderTest {
 
         boolean found = false;
         for (GeocoderResult result : results.getResults()) {
-            if ("Rue du Faubourg Saint-honoré 75008 Paris".equals(result.getDescription())) {
+            if (result.getDescription().contains("55 Rue du Faubourg")) {
                 double dist = SphericalDistanceLibrary.distance(result.getLat(),
-                        result.getLng(), 48.868637, 2.322939);
+                        result.getLng(), 48.870637, 2.316939);
                 assert (dist < 100);
                 found = true;
             }

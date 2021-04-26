@@ -63,6 +63,8 @@ public class BikeRentalUpdater extends PollingGraphUpdater {
         // Each updater can be assigned a unique network ID in the configuration to prevent returning bikes at
         // stations for another network. TODO shouldn't we give each updater a unique network ID by default?
         String networkName = config.path("network").asText();
+	boolean allowOverloading = config.path("allowOverloading").asText().equals("true");
+
         BikeRentalDataSource source = null;
         if (sourceType != null) {
             if (sourceType.equals("jcdecaux")) {
@@ -94,13 +96,17 @@ public class BikeRentalUpdater extends PollingGraphUpdater {
             } else if (sourceType.equals("gbfs")) {
                 source = new GbfsBikeRentalDataSource(networkName);
             } else if (sourceType.equals("smoove")) {
-                source = new SmooveBikeRentalDataSource(networkName);
+                source = new SmooveBikeRentalDataSource(networkName, allowOverloading);
             } else if (sourceType.equals("bicimad")) {
                 source = new BicimadBikeRentalDataSource();
             } else if (sourceType.equals("samocat")) {
                 source = new SamocatScooterRentalDataSource(networkName);
             } else if (sourceType.equals("sharingos")) {
                 source = new SharingOSBikeRentalDataSource(networkName);
+            } else if (sourceType.equals("vilkku")) {
+                source = new VilkkuBikeRentalDataSource(networkName);
+            } else if (sourceType.equals("kaakau")) {
+                source = new KaakauBikeRentalDataSource(networkName);
             } else if (sourceType.equals("tartu-bycicle-park")) {
                 source = new TartuBicycleRentDataSource();
             }
