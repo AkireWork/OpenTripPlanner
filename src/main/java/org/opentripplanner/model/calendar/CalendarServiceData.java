@@ -2,6 +2,7 @@
 package org.opentripplanner.model.calendar;
 
 import org.opentripplanner.model.FeedScopedId;
+import org.opentripplanner.model.ServiceCalendarDate;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -22,6 +23,10 @@ public class CalendarServiceData implements Serializable {
 
     private Map<FeedScopedId, List<ServiceDate>> serviceDatesByServiceId = new HashMap<>();
 
+    private Map<FeedScopedId, List<ServiceDate>> serviceEndDateByServiceId = new HashMap<>();
+
+    private Map<FeedScopedId, List<ServiceCalendarDate>> serviceCalendarDateByServiceId = new HashMap<>();
+
     private Map<LocalizedServiceId, List<Date>> datesByLocalizedServiceId = new HashMap<>();
 
     private Map<ServiceDate, Set<FeedScopedId>> serviceIdsByDate = new HashMap<>();
@@ -41,6 +46,14 @@ public class CalendarServiceData implements Serializable {
 
     public Set<FeedScopedId> getServiceIds() {
         return Collections.unmodifiableSet(serviceDatesByServiceId.keySet());
+    }
+
+    public Set<FeedScopedId> getEndDatesServiceIds() {
+        return Collections.unmodifiableSet(serviceEndDateByServiceId.keySet());
+    }
+
+    public Set<FeedScopedId> getCalendarDatesServiceIds() {
+        return Collections.unmodifiableSet(serviceEndDateByServiceId.keySet());
     }
 
     public Set<LocalizedServiceId> getLocalizedServiceIds() {
@@ -71,6 +84,24 @@ public class CalendarServiceData implements Serializable {
             }
             serviceIds.add(serviceId);
         }
+    }
+
+    public void putServiceEndDateForServiceId(FeedScopedId serviceId, ServiceDate serviceDate) {
+        List<ServiceDate> serviceDates = new ArrayList<>();
+        serviceDates.add(serviceDate);
+        serviceEndDateByServiceId.put(serviceId, Collections.unmodifiableList(serviceDates));
+    }
+
+    public ServiceDate getServiceEndDateForServiceId(FeedScopedId serviceId) {
+        return serviceEndDateByServiceId.get(serviceId).get(0);
+    }
+
+    public void putServiceCalendarDatesForServiceId(FeedScopedId serviceId, List<ServiceCalendarDate> serviceCalendarDates) {
+        serviceCalendarDateByServiceId.put(serviceId, Collections.unmodifiableList(serviceCalendarDates));
+    }
+
+    public List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId) {
+        return serviceCalendarDateByServiceId.get(serviceId);
     }
 
     public List<Date> getDatesForLocalizedServiceId(LocalizedServiceId serviceId) {

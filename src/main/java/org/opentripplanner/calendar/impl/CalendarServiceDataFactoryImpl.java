@@ -88,6 +88,10 @@ public class CalendarServiceDataFactoryImpl {
 
             data.putServiceDatesForServiceId(serviceId, serviceDates);
 
+            data.putServiceEndDateForServiceId(serviceId, getServiceEndDateForServiceId(serviceId, serviceIdTimeZone));
+
+            data.putServiceCalendarDatesForServiceId(serviceId, getServiceCalendarDatesForServiceId(serviceId, serviceIdTimeZone));
+
             addDatesForLocalizedServiceId(serviceId, serviceDates, data);
         }
 
@@ -122,10 +126,22 @@ public class CalendarServiceDataFactoryImpl {
         if (c != null) {
             addDatesFromCalendar(c, serviceIdTimeZone, activeDates);
         }
-        for (ServiceCalendarDate cd : transitService.getCalendarDatesForServiceId(serviceId)) {
-            addAndRemoveDatesFromCalendarDate(cd, activeDates);
-        }
+//        for (ServiceCalendarDate cd : transitService.getCalendarDatesForServiceId(serviceId)) {
+//            addAndRemoveDatesFromCalendarDate(cd, activeDates);
+//        }
         return activeDates;
+    }
+
+    private ServiceDate getServiceEndDateForServiceId(FeedScopedId serviceId,
+                                                         TimeZone serviceIdTimeZone) {
+        ServiceCalendar c = transitService.getCalendarForServiceId(serviceId);
+
+        return c.getEndDate();
+    }
+
+    private List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId,
+                                                      TimeZone serviceIdTimeZone) {
+        return transitService.getCalendarDatesForServiceId(serviceId);
     }
 
     private void setTimeZonesForAgencies(CalendarServiceData data) {

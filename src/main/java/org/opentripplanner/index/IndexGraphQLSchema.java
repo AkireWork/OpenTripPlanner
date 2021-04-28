@@ -267,6 +267,10 @@ public class IndexGraphQLSchema {
 
     public GraphQLOutputType tripTimeByStopNameType;
 
+    public GraphQLOutputType calendarDatesByFirstStoptimeType;
+
+    public GraphQLOutputType calendarDateExceptionType;
+
     public GraphQLSchema indexSchema;
 
     private Relay relay = new Relay();
@@ -1193,6 +1197,37 @@ public class IndexGraphQLSchema {
                         .build())
                 .build();
 
+        calendarDateExceptionType = GraphQLObjectType.newObject()
+                .name("CalendarDateException")
+                .description("Trips stoptimes by stopName")
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("exceptionType")
+                        .type(Scalars.GraphQLInt)
+                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDateException) environment.getSource()).exceptionType)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("dates")
+                        .type(new GraphQLList(Scalars.GraphQLString))
+                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDateException) environment.getSource()).dates.stream()
+                        .sorted(Comparator.comparing(date -> date)).collect(Collectors.toList()))
+                        .build())
+                .build();
+
+        calendarDatesByFirstStoptimeType = GraphQLObjectType.newObject()
+                .name("CalendarDatesByFirstStoptime")
+                .description("Calendar dates and first stoptime for trip")
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("time")
+                        .type(new GraphQLNonNull(Scalars.GraphQLInt))
+                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDatesByFirstStoptime) environment.getSource()).time)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("calendarDateExceptions")
+                        .type(new GraphQLList(calendarDateExceptionType))
+                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDatesByFirstStoptime) environment.getSource()).calendarDateExceptions)
+                        .build())
+                .build();
+
         tripTimesByWeekdaysType = GraphQLObjectType.newObject()
                 .name("TripTimesByWeekdays")
                 .description("TripTimes by stop names for week grouped by weekdays")
@@ -1200,6 +1235,11 @@ public class IndexGraphQLSchema {
                         .name("weekdays")
                         .type(new GraphQLNonNull(Scalars.GraphQLString))
                         .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).weekdays)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("calendarDatesByFirstStoptime")
+                        .type(calendarDatesByFirstStoptimeType)
+                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).calendarDatesByFirstStoptime)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("tripTimeByStopNameList")
@@ -2011,6 +2051,16 @@ public class IndexGraphQLSchema {
                             boolean omitCanceled = environment.getArgument("omitCanceled");
 
                             return index.tripTimesWeekdaysGroups(tripPattern, omitNonPickups, omitCanceled);
+                        })
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("tripTimesValidTill")
+                        .type(Scalars.GraphQLString)
+                        .dataFetcher(environment -> {
+                            Trip trip = environment.getSource();
+                            TripPattern tripPattern = index.patternForTrip.get(trip);
+
+                            return index.tripTimesValidTill(tripPattern).getAsDate();
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3256,14 +3306,14 @@ public class IndexGraphQLSchema {
                                 .type(new GraphQLList(Scalars.GraphQLString))
                                 .build())
                         .dataFetcher(environment -> {
-                                Stream<Trip> stream = index.tripForId.values().stream();
-                                if (environment.getArgument("feeds") instanceof List) {
-                                        stream = stream
-                                                .filter(trip -> ((List<String>) environment.getArgument("feeds")).contains(
-                                                        trip.getId().getAgencyId())
+                            Stream<Trip> stream = index.tripForId.values().stream();
+                            if (environment.getArgument("feeds") instanceof List) {
+                                stream = stream
+                                        .filter(trip -> ((List<String>) environment.getArgument("feeds")).contains(
+                                                trip.getId().getAgencyId())
                                         );
-                                }
-                                return stream.collect(Collectors.toList());
+                            }
+                            return stream.collect(Collectors.toList());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3553,12 +3603,12 @@ public class IndexGraphQLSchema {
                                 .build())
                         .dataFetcher(environment -> {
                             return index.getAlerts().stream()
-                                    .filter(alert -> environment.getArgument("feeds") == null || ((List)environment.getArgument("feeds")).contains(alert.getFeedId()))
-                                    .filter(alert -> environment.getArgument("severityLevel") == null || ((List)environment.getArgument("severityLevel")).contains(alert.getAlert().severityLevel))
-                                    .filter(alert -> environment.getArgument("effect") == null || ((List)environment.getArgument("effect")).contains(alert.getAlert().effect))
-                                    .filter(alert -> environment.getArgument("cause") == null || ((List)environment.getArgument("cause")).contains(alert.getAlert().cause))
-                                    .filter(alert -> environment.getArgument("route") == null || (alert.getRoute() != null && ((List)environment.getArgument("route")).contains(FeedScopedId.convertToString(alert.getRoute()))))
-                                    .filter(alert -> environment.getArgument("stop") == null || (alert.getStop() != null && ((List)environment.getArgument("stop")).contains(FeedScopedId.convertToString(alert.getStop()))))
+                                    .filter(alert -> environment.getArgument("feeds") == null || ((List) environment.getArgument("feeds")).contains(alert.getFeedId()))
+                                    .filter(alert -> environment.getArgument("severityLevel") == null || ((List) environment.getArgument("severityLevel")).contains(alert.getAlert().severityLevel))
+                                    .filter(alert -> environment.getArgument("effect") == null || ((List) environment.getArgument("effect")).contains(alert.getAlert().effect))
+                                    .filter(alert -> environment.getArgument("cause") == null || ((List) environment.getArgument("cause")).contains(alert.getAlert().cause))
+                                    .filter(alert -> environment.getArgument("route") == null || (alert.getRoute() != null && ((List) environment.getArgument("route")).contains(FeedScopedId.convertToString(alert.getRoute()))))
+                                    .filter(alert -> environment.getArgument("stop") == null || (alert.getStop() != null && ((List) environment.getArgument("stop")).contains(FeedScopedId.convertToString(alert.getStop()))))
                                     .collect(Collectors.toList());
                         })
                         .build())
@@ -3578,21 +3628,21 @@ public class IndexGraphQLSchema {
                                 .type(new GraphQLList(Scalars.GraphQLString))
                                 .build())
                         .dataFetcher(environment -> {
-                                if ((environment.getArgument("ids") instanceof List)) {
-                                        Map<String, BikeRentalStation> rentalStations =
-                                                index.graph.getService(BikeRentalStationService.class) != null
+                            if ((environment.getArgument("ids") instanceof List)) {
+                                Map<String, BikeRentalStation> rentalStations =
+                                        index.graph.getService(BikeRentalStationService.class) != null
                                                 ? index.graph.getService(BikeRentalStationService.class).getBikeRentalStations()
-                                                        .stream()
-                                                        .collect(Collectors.toMap(station -> station.id, station ->  station))
-                                                : Collections.EMPTY_MAP;
-                                        return ((List<String>) environment.getArgument("ids"))
                                                 .stream()
-                                                .map(rentalStations::get)
-                                                .collect(Collectors.toList());
-                                }
-                                return new ArrayList<>(index.graph.getService(BikeRentalStationService.class) != null
-                                        ? index.graph.getService(BikeRentalStationService.class).getBikeRentalStations()
-                                        : Collections.EMPTY_LIST);
+                                                .collect(Collectors.toMap(station -> station.id, station -> station))
+                                                : Collections.EMPTY_MAP;
+                                return ((List<String>) environment.getArgument("ids"))
+                                        .stream()
+                                        .map(rentalStations::get)
+                                        .collect(Collectors.toList());
+                            }
+                            return new ArrayList<>(index.graph.getService(BikeRentalStationService.class) != null
+                                    ? index.graph.getService(BikeRentalStationService.class).getBikeRentalStations()
+                                    : Collections.EMPTY_LIST);
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3702,7 +3752,8 @@ public class IndexGraphQLSchema {
         if (dateString != null) {
             try {
                 date = ServiceDate.parseString(dateString.replace("-", ""));
-            } catch (ParseException | NullPointerException e) {}
+            } catch (ParseException | NullPointerException e) {
+            }
         }
         return date;
     }
@@ -3869,7 +3920,7 @@ public class IndexGraphQLSchema {
                         .type(agencyType)
                         .dataFetcher(environment -> {
                             Leg leg = environment.getSource();
-                            if(leg.routeId != null) {
+                            if (leg.routeId != null) {
                                 return index.getAgencyWithFeedScopeId(leg.routeId.getAgencyId() + ":" + leg.agencyId);
                             } else return null;
                         })

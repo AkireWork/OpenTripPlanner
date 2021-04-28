@@ -2,6 +2,7 @@ package org.opentripplanner.model;
 
 import org.opentripplanner.model.calendar.ServiceDate;
 
+import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
 
@@ -18,6 +19,18 @@ public interface CalendarService {
      *         active
      */
     Set<ServiceDate> getServiceDatesForServiceId(FeedScopedId serviceId);
+
+    /**
+     * @param serviceId the target service id
+     * @return the service end date for the specified service id
+     */
+    ServiceDate getServiceEndDateForServiceId(FeedScopedId serviceId);
+
+    /**
+     * @param serviceId the target service id
+     * @return the service calendar date for the specified service id
+     */
+    List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId);
 
     /**
      * Determine the set of service ids that are active on the specified service
