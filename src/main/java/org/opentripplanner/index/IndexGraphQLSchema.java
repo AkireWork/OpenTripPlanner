@@ -49,6 +49,7 @@ import org.opentripplanner.util.model.EncodedPolylineBean;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -1209,7 +1210,8 @@ public class IndexGraphQLSchema {
                         .name("dates")
                         .type(new GraphQLList(Scalars.GraphQLString))
                         .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDateException) environment.getSource()).dates.stream()
-                        .sorted(Comparator.comparing(date -> date)).collect(Collectors.toList()))
+                                .sorted(Comparator.comparing(date -> date)).map(date -> new SimpleDateFormat("dd.MM.yyyy").format(date))
+                                .collect(Collectors.toList()))
                         .build())
                 .build();
 
@@ -2060,7 +2062,7 @@ public class IndexGraphQLSchema {
                             Trip trip = environment.getSource();
                             TripPattern tripPattern = index.patternForTrip.get(trip);
 
-                            return index.tripTimesValidTill(tripPattern).getAsDate();
+                            return new SimpleDateFormat("dd.MM.yyyy").format(index.tripTimesValidTill(tripPattern).getAsDate());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
