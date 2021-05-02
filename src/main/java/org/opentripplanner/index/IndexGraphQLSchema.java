@@ -17,7 +17,7 @@ import org.opentripplanner.common.model.P2;
 import org.opentripplanner.gtfs.GtfsLibrary;
 import org.opentripplanner.index.model.StopTimesInPattern;
 import org.opentripplanner.index.model.TripTimeShort;
-import org.opentripplanner.index.model.TripTimesByWeekdays;
+import org.opentripplanner.index.model.TripTimesByWeekdaysParts;
 import org.opentripplanner.model.*;
 import org.opentripplanner.model.calendar.ServiceDate;
 import org.opentripplanner.profile.StopCluster;
@@ -263,6 +263,8 @@ public class IndexGraphQLSchema {
     public GraphQLObjectType queryType;
 
     public GraphQLOutputType planType = new GraphQLTypeReference("Plan");
+
+    public GraphQLOutputType tripTimesByWeekdaysPartsType;
 
     public GraphQLOutputType tripTimesByWeekdaysType;
 
@@ -1189,12 +1191,12 @@ public class IndexGraphQLSchema {
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("stopName")
                         .type(new GraphQLNonNull(Scalars.GraphQLString))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.TripTimeByStopName) environment.getSource()).stopName)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.TripTimeByStopName) environment.getSource()).stopName)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("tripTimeShort")
                         .type(new GraphQLNonNull(stoptimeType))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.TripTimeByStopName) environment.getSource()).tripTimeShort)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.TripTimeByStopName) environment.getSource()).tripTimeShort)
                         .build())
                 .build();
 
@@ -1204,12 +1206,12 @@ public class IndexGraphQLSchema {
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("exceptionType")
                         .type(Scalars.GraphQLInt)
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDateException) environment.getSource()).exceptionType)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.CalendarDateException) environment.getSource()).exceptionType)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("dates")
                         .type(new GraphQLList(Scalars.GraphQLString))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDateException) environment.getSource()).dates.stream()
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.CalendarDateException) environment.getSource()).dates.stream()
                                 .sorted(Comparator.comparing(date -> date)).map(date -> new SimpleDateFormat("dd.MM.yyyy").format(date))
                                 .collect(Collectors.toList()))
                         .build())
@@ -1221,12 +1223,12 @@ public class IndexGraphQLSchema {
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("time")
                         .type(new GraphQLNonNull(Scalars.GraphQLInt))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDatesByFirstStoptime) environment.getSource()).time)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.CalendarDatesByFirstStoptime) environment.getSource()).time)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("calendarDateExceptions")
                         .type(new GraphQLList(calendarDateExceptionType))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays.CalendarDatesByFirstStoptime) environment.getSource()).calendarDateExceptions)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.CalendarDatesByFirstStoptime) environment.getSource()).calendarDateExceptions)
                         .build())
                 .build();
 
@@ -1236,17 +1238,32 @@ public class IndexGraphQLSchema {
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("weekdays")
                         .type(new GraphQLNonNull(Scalars.GraphQLString))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).weekdays)
-                        .build())
-                .field(GraphQLFieldDefinition.newFieldDefinition()
-                        .name("calendarDatesByFirstStoptime")
-                        .type(calendarDatesByFirstStoptimeType)
-                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).calendarDatesByFirstStoptime)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.TripTimesByWeekdays) environment.getSource()).weekdays)
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("tripTimeByStopNameList")
                         .type(new GraphQLList(tripTimeByStopNameType))
-                        .dataFetcher(environment -> ((TripTimesByWeekdays) environment.getSource()).tripTimeByStopNameList)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts.TripTimesByWeekdays) environment.getSource()).tripTimeByStopNameList)
+                        .build())
+                .build();
+
+        tripTimesByWeekdaysPartsType = GraphQLObjectType.newObject()
+                .name("TripTimesByWeekdaysParts")
+                .description("Chunks of TripTimes by stop names for week grouped by weekdays")
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("parts")
+                        .type(new GraphQLNonNull(Scalars.GraphQLInt))
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).parts)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("calendarDatesByFirstStoptime")
+                        .type(calendarDatesByFirstStoptimeType)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).calendarDatesByFirstStoptime)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("tripTimesByWeekdaysList")
+                        .type(new GraphQLList(tripTimesByWeekdaysType))
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).tripTimesByWeekdaysList)
                         .build())
                 .build();
 
@@ -2009,7 +2026,7 @@ public class IndexGraphQLSchema {
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("stoptimesForWeek")
-                        .type(new GraphQLList(tripTimesByWeekdaysType))
+                        .type(new GraphQLList(tripTimesByWeekdaysPartsType))
                         .argument(GraphQLArgument.newArgument()
                                 .name("omitNonPickups")
                                 .description("If true, only those departures which allow boarding are returned")

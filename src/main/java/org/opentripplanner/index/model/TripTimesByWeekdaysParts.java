@@ -4,35 +4,67 @@ import com.google.common.collect.Lists;
 import org.opentripplanner.model.ServiceCalendarDate;
 import org.opentripplanner.model.Stop;
 
-import java.util.*;
+import java.util.Date;
+import java.util.List;
+import java.util.Optional;
 
-public class TripTimesByWeekdays {
-    public String weekdays;
-    public List<TripTimeByStopName> tripTimeByStopNameList = Lists.newArrayList();
+
+public class TripTimesByWeekdaysParts {
+    public static final int MAX_PART_SIZE = 32;
+
+    public int parts;
+    public List<TripTimesByWeekdays> tripTimesByWeekdaysList = Lists.newArrayList();
     public CalendarDatesByFirstStoptime calendarDatesByFirstStoptime;
 
-    public TripTimesByWeekdays() {
-    }
-
-    public TripTimesByWeekdays(String weekdaysGroup, int firstStoptime, List<ServiceCalendarDate> serviceCalendarDates) {
-        this.weekdays = weekdaysGroup;
+    public TripTimesByWeekdaysParts(String weekdaysGroup, int firstStoptime, List<ServiceCalendarDate> serviceCalendarDates) {
+        this.parts = 1;
+        this.tripTimesByWeekdaysList.add(new TripTimesByWeekdays(weekdaysGroup));
         this.calendarDatesByFirstStoptime = new CalendarDatesByFirstStoptime(firstStoptime, serviceCalendarDates);
     }
 
     public void addTripTimeByWeekdays(TripTimeShort tripTimeShort, Stop stop, String weekdays) {
-        if (this.weekdays.equals(weekdays)) {
-            if (this.tripTimeByStopNameList.stream().noneMatch(tripTimeByStop1 -> tripTimeByStop1.stopName.equals(stop.getName()))) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
-                this.tripTimeByStopNameList.add(new TripTimeByStopName(stop.getName(), tripTimeShort));
-            }
+        if (this.tripTimesByWeekdaysList.get(parts - 1).tripTimeByStopNameList.size() < MAX_PART_SIZE) {
+            this.tripTimesByWeekdaysList.get(parts - 1).addTripTimeByWeekdays(tripTimeShort, stop, weekdays);
+        } else {
+            this.parts++;
+            TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays(weekdays);
+            tripTimesByWeekdays.addTripTimeByWeekdays(tripTimeShort, stop, weekdays);
+            this.tripTimesByWeekdaysList.add(tripTimesByWeekdays);
         }
     }
 
     @Override
     public String toString() {
-        return "TripTimeByWeekdays{" +
-                "weekdays='" + weekdays + '\'' +
-                ", tripTimeByStopNameList=" + tripTimeByStopNameList +
+        return "TripTimesByWeekdaysPart{" +
+                "parts=" + parts +
+                ", tripTimeByStopNameList=" + tripTimesByWeekdaysList +
                 '}';
+    }
+
+
+    public static class TripTimesByWeekdays {
+        public String weekdays;
+        public List<TripTimeByStopName> tripTimeByStopNameList = Lists.newArrayList();
+
+        public TripTimesByWeekdays(String weekdaysGroup) {
+            this.weekdays = weekdaysGroup;
+        }
+
+        public void addTripTimeByWeekdays(TripTimeShort tripTimeShort, Stop stop, String weekdays) {
+            if (this.weekdays.equals(weekdays)) {
+                if (this.tripTimeByStopNameList.stream().noneMatch(tripTimeByStop1 -> tripTimeByStop1.stopName.equals(stop.getName()))) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
+                    this.tripTimeByStopNameList.add(new TripTimeByStopName(stop.getName(), tripTimeShort));
+                }
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "TripTimeByWeekdays{" +
+                    "weekdays='" + weekdays + '\'' +
+                    ", tripTimeByStopNameList=" + tripTimeByStopNameList +
+                    '}';
+        }
     }
 
     public static class TripTimeByStopName {

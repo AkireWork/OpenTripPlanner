@@ -46,8 +46,6 @@ import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Geometry;
 import graphql.ExecutionResult;
 import graphql.GraphQL;
-import graphql.GraphQLError;
-import graphql.schema.GraphQLSchema;
 import io.sentry.Sentry;
 import io.sentry.event.Event;
 import io.sentry.event.EventBuilder;
@@ -67,8 +65,7 @@ import org.opentripplanner.index.IndexGraphQLSchema;
 import org.opentripplanner.index.ResourceConstrainedExecutorServiceExecutionStrategy;
 import org.opentripplanner.index.model.StopTimesInPattern;
 import org.opentripplanner.index.model.TripTimeShort;
-import org.opentripplanner.index.model.TripTimesByWeekdays;
-import org.opentripplanner.model.calendar.ServiceDate;
+import org.opentripplanner.index.model.TripTimesByWeekdaysParts;
 import org.opentripplanner.profile.*;
 import org.opentripplanner.routing.alertpatch.AlertPatch;
 import org.opentripplanner.routing.algorithm.AStar;
@@ -940,30 +937,30 @@ public class GraphIndex {
         ).collect(Collectors.toList());
     }
 
-    public List<TripTimesByWeekdays> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
+    public List<TripTimesByWeekdaysParts> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
         if (pattern == null) {
             return null;
         }
-        List<TripTimesByWeekdays> tripTimeByWeekdaysList = new ArrayList<>();
+        List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList = new ArrayList<>();
 
         Timetable timetable = pattern.scheduledTimetable;
         for (TripTimes tripTimes : timetable.tripTimes.stream().sorted().collect(toList())) {
             String weekdaysGroup = getWeekdaysGroup(graph.getCalendarService().getServiceDatesForServiceId(tripTimes.trip.getServiceId()));
             String weekdaysGroupReplaced = replaceDays(weekdaysGroup);
             List<ServiceCalendarDate> serviceCalendarDates = graph.getCalendarService().getServiceCalendarDatesForServiceId(tripTimes.trip.getServiceId());
-            TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays(
+            TripTimesByWeekdaysParts tripTimesByWeekdaysPart = new TripTimesByWeekdaysParts(
                     weekdaysGroupReplaced, tripTimes.getDepartureTime(0), filterServiceCalendarDates(serviceCalendarDates, weekdaysGroup));
             int sidx = 0;
             for (Stop stop : pattern.stopPattern.stops) {
                 if (omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE) continue;
                 if (omitCanceled && tripTimes.isTimeCanceled(sidx)) continue;
-                tripTimesByWeekdays.addTripTimeByWeekdays(new TripTimeShort(tripTimes, sidx, stop), stop, weekdaysGroupReplaced);
+                tripTimesByWeekdaysPart.addTripTimeByWeekdays(new TripTimeShort(tripTimes, sidx, stop), stop, weekdaysGroupReplaced);
                 sidx++;
             }
-            tripTimeByWeekdaysList.add(tripTimesByWeekdays);
+            tripTimesByWeekdaysPartsList.add(tripTimesByWeekdaysPart);
         }
 
-        return tripTimeByWeekdaysList;
+        return tripTimesByWeekdaysPartsList;
     }
 
     public List<String> tripTimesWeekdaysGroups(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
