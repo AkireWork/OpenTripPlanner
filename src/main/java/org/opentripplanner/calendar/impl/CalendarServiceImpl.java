@@ -2,6 +2,7 @@
 package org.opentripplanner.calendar.impl;
 
 import org.opentripplanner.model.FeedScopedId;
+import org.opentripplanner.model.ServiceCalendar;
 import org.opentripplanner.model.ServiceCalendarDate;
 import org.opentripplanner.model.calendar.CalendarServiceData;
 import org.opentripplanner.model.calendar.ServiceDate;
@@ -52,6 +53,12 @@ public class CalendarServiceImpl implements CalendarService {
     public List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId) {
         CalendarServiceData allData = getData();
         return allData.getServiceCalendarDatesForServiceId(serviceId);
+    }
+
+    @Override
+    public ServiceCalendar getServiceCalendarForServiceId(FeedScopedId serviceId) {
+        CalendarServiceData allData = getData();
+        return allData.getServiceCalendarForServiceId(serviceId);
     }
 
     @Override

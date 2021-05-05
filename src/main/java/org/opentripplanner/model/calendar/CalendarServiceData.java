@@ -2,6 +2,7 @@
 package org.opentripplanner.model.calendar;
 
 import org.opentripplanner.model.FeedScopedId;
+import org.opentripplanner.model.ServiceCalendar;
 import org.opentripplanner.model.ServiceCalendarDate;
 
 import java.io.Serializable;
@@ -26,6 +27,8 @@ public class CalendarServiceData implements Serializable {
     private Map<FeedScopedId, List<ServiceDate>> serviceEndDateByServiceId = new HashMap<>();
 
     private Map<FeedScopedId, List<ServiceCalendarDate>> serviceCalendarDateByServiceId = new HashMap<>();
+
+    private Map<FeedScopedId, ServiceCalendar> serviceCalendarByServiceId = new HashMap<>();
 
     private Map<LocalizedServiceId, List<Date>> datesByLocalizedServiceId = new HashMap<>();
 
@@ -54,6 +57,10 @@ public class CalendarServiceData implements Serializable {
 
     public Set<FeedScopedId> getCalendarDatesServiceIds() {
         return Collections.unmodifiableSet(serviceEndDateByServiceId.keySet());
+    }
+
+    public Set<FeedScopedId> getServiceCalendarServiceIds() {
+        return Collections.unmodifiableSet(serviceCalendarByServiceId.keySet());
     }
 
     public Set<LocalizedServiceId> getLocalizedServiceIds() {
@@ -102,6 +109,14 @@ public class CalendarServiceData implements Serializable {
 
     public List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId) {
         return serviceCalendarDateByServiceId.get(serviceId);
+    }
+
+    public void putServiceCalendarForServiceId(FeedScopedId serviceId, ServiceCalendar serviceCalendar) {
+        serviceCalendarByServiceId.put(serviceId, serviceCalendar);
+    }
+
+    public ServiceCalendar getServiceCalendarForServiceId(FeedScopedId serviceId) {
+        return serviceCalendarByServiceId.get(serviceId);
     }
 
     public List<Date> getDatesForLocalizedServiceId(LocalizedServiceId serviceId) {

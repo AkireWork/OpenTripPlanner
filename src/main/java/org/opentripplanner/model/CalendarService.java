@@ -33,6 +33,12 @@ public interface CalendarService {
     List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId);
 
     /**
+     * @param serviceId the target service id
+     * @return the service calendar for the specified service id
+     */
+    ServiceCalendar getServiceCalendarForServiceId(FeedScopedId serviceId);
+
+    /**
      * Determine the set of service ids that are active on the specified service
      * date.
      *

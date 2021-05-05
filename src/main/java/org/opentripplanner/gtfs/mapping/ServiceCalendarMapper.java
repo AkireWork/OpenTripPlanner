@@ -37,6 +37,8 @@ class ServiceCalendarMapper {
         lhs.setStartDate(ServiceDateMapper.mapServiceDate(rhs.getStartDate()));
         lhs.setEndDate(ServiceDateMapper.mapServiceDate(rhs.getEndDate()));
 
+        lhs.makeWeekdaysGroup();
+
         return lhs;
     }
 }

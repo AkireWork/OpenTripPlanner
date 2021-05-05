@@ -21,6 +21,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.TimeZone;
+import java.util.stream.Collectors;
 
 /**
  * We perform initial date calculations in the timezone of the host jvm, which
@@ -92,6 +93,8 @@ public class CalendarServiceDataFactoryImpl {
 
             data.putServiceCalendarDatesForServiceId(serviceId, getServiceCalendarDatesForServiceId(serviceId, serviceIdTimeZone));
 
+            data.putServiceCalendarForServiceId(serviceId, getServiceCalendarForServiceId(serviceId, serviceIdTimeZone));
+
             addDatesForLocalizedServiceId(serviceId, serviceDates, data);
         }
 
@@ -139,9 +142,50 @@ public class CalendarServiceDataFactoryImpl {
         return c.getEndDate();
     }
 
+    private ServiceCalendar getServiceCalendarForServiceId(FeedScopedId serviceId,
+                                                      TimeZone serviceIdTimeZone) {
+        return transitService.getCalendarForServiceId(serviceId);
+    }
+
     private List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId,
                                                       TimeZone serviceIdTimeZone) {
-        return transitService.getCalendarDatesForServiceId(serviceId);
+        ServiceCalendar c = transitService.getCalendarForServiceId(serviceId);
+
+        return filterServiceCalendarDates(transitService.getCalendarDatesForServiceId(serviceId), c.getWeekdaysString(), c.getEndDate());
+    }
+
+    public String getDayName(int day) {
+//        @ServiceDate week starts from Monday
+        switch (day) {
+            case 1:
+                return "E";
+            case 2:
+                return "T";
+            case 3:
+                return "K";
+            case 4:
+                return "N";
+            case 5:
+                return "R";
+            case 6:
+                return "L";
+            case 7:
+                return "P";
+            default:
+                return "";
+        }
+    }
+
+    private List<ServiceCalendarDate> filterServiceCalendarDates(List<ServiceCalendarDate> serviceCalendarDates, String weekDays, ServiceDate endDate) {
+        return serviceCalendarDates.stream().filter(serviceCalendarDate ->
+                (
+                        serviceCalendarDate.getExceptionType() == ServiceCalendarDate.EXCEPTION_TYPE_ADD &&
+                                !weekDays.contains(getDayName(serviceCalendarDate.getDate().getDay()))
+                ) || (
+                        serviceCalendarDate.getExceptionType() == ServiceCalendarDate.EXCEPTION_TYPE_REMOVE &&
+                                weekDays.contains(getDayName(serviceCalendarDate.getDate().getDay()))
+                ) && serviceCalendarDate.getDate().getAsDate().before(endDate.getAsDate())
+        ).collect(Collectors.toList());
     }
 
     private void setTimeZonesForAgencies(CalendarServiceData data) {

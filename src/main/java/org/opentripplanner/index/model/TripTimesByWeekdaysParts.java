@@ -12,25 +12,40 @@ import java.util.Optional;
 public class TripTimesByWeekdaysParts {
     public static final int MAX_PART_SIZE = 32;
 
+    public String weekdays;
     public int parts;
     public List<TripTimesByWeekdays> tripTimesByWeekdaysList = Lists.newArrayList();
     public CalendarDatesByFirstStoptime calendarDatesByFirstStoptime;
 
     public TripTimesByWeekdaysParts(String weekdaysGroup, int firstStoptime, List<ServiceCalendarDate> serviceCalendarDates) {
         this.parts = 1;
-        this.tripTimesByWeekdaysList.add(new TripTimesByWeekdays(weekdaysGroup));
+        this.weekdays = weekdaysGroup;
+        this.tripTimesByWeekdaysList.add(new TripTimesByWeekdays());
         this.calendarDatesByFirstStoptime = new CalendarDatesByFirstStoptime(firstStoptime, serviceCalendarDates);
     }
 
     public void addTripTimeByWeekdays(TripTimeShort tripTimeShort, Stop stop, String weekdays) {
-        if (this.tripTimesByWeekdaysList.get(parts - 1).tripTimeByStopNameList.size() < MAX_PART_SIZE) {
-            this.tripTimesByWeekdaysList.get(parts - 1).addTripTimeByWeekdays(tripTimeShort, stop, weekdays);
-        } else {
-            this.parts++;
-            TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays(weekdays);
-            tripTimesByWeekdays.addTripTimeByWeekdays(tripTimeShort, stop, weekdays);
-            this.tripTimesByWeekdaysList.add(tripTimesByWeekdays);
+        if (this.weekdays.equals(weekdays)) {
+            if (this.tripTimesByWeekdaysList.get(parts - 1).tripTimeByStopNameList.size() < MAX_PART_SIZE) {
+                this.tripTimesByWeekdaysList.get(parts - 1).addTripTimeByWeekdays(tripTimeShort, stop, weekdays);
+            } else {
+                this.parts++;
+                TripTimesByWeekdays tripTimesByWeekdays = new TripTimesByWeekdays();
+                tripTimesByWeekdays.addTripTimeByWeekdays(tripTimeShort, stop, weekdays);
+                this.tripTimesByWeekdaysList.add(tripTimesByWeekdays);
+            }
         }
+    }
+
+    public boolean containsTrip(int scheduledDeparture, String stopName) {
+        for (TripTimesByWeekdays tripTimesByWeekdays : tripTimesByWeekdaysList) {
+            if (!tripTimesByWeekdays.tripTimeByStopNameList.isEmpty()) {
+                TripTimeByStopName tripTimeByStopName = tripTimesByWeekdays.tripTimeByStopNameList.get(0);
+                if (tripTimeByStopName.stopName.equals(stopName) && tripTimeByStopName.tripTimeShort.scheduledDeparture == scheduledDeparture)
+                    return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -43,25 +58,17 @@ public class TripTimesByWeekdaysParts {
 
 
     public static class TripTimesByWeekdays {
-        public String weekdays;
         public List<TripTimeByStopName> tripTimeByStopNameList = Lists.newArrayList();
 
-        public TripTimesByWeekdays(String weekdaysGroup) {
-            this.weekdays = weekdaysGroup;
-        }
-
         public void addTripTimeByWeekdays(TripTimeShort tripTimeShort, Stop stop, String weekdays) {
-            if (this.weekdays.equals(weekdays)) {
-                if (this.tripTimeByStopNameList.stream().noneMatch(tripTimeByStop1 -> tripTimeByStop1.stopName.equals(stop.getName()))) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
-                    this.tripTimeByStopNameList.add(new TripTimeByStopName(stop.getName(), tripTimeShort));
-                }
+            if (this.tripTimeByStopNameList.stream().noneMatch(tripTimeByStop1 -> tripTimeByStop1.stopName.equals(stop.getName()))) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
+                this.tripTimeByStopNameList.add(new TripTimeByStopName(stop.getName(), tripTimeShort));
             }
         }
 
         @Override
         public String toString() {
             return "TripTimeByWeekdays{" +
-                    "weekdays='" + weekdays + '\'' +
                     ", tripTimeByStopNameList=" + tripTimeByStopNameList +
                     '}';
         }
@@ -70,18 +77,13 @@ public class TripTimesByWeekdaysParts {
     public static class TripTimeByStopName {
         public String stopName;
         public TripTimeShort tripTimeShort;
+        public boolean differentDeparture = false;
 
         public TripTimeByStopName(String stopName, TripTimeShort tripTimeShort) {
             this.stopName = stopName;
             this.tripTimeShort = tripTimeShort;
-        }
-
-        public boolean containsStopTime(int departureTime) {
-            return this.tripTimeShort.scheduledDeparture == departureTime;
-        }
-
-        public int closestStopTime(int departureTime) {
-            return Math.abs(this.tripTimeShort.scheduledDeparture - departureTime);
+            if (tripTimeShort.scheduledDeparture != tripTimeShort.scheduledArrival)
+                this.differentDeparture = true;
         }
 
         @Override
