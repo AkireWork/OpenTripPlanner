@@ -10,7 +10,7 @@ import java.util.Optional;
 
 
 public class TripTimesByWeekdaysParts {
-    public static final int MAX_PART_SIZE = 32;
+    public static final int MAX_PART_SIZE = 36;
 
     public String weekdays;
     public int parts;

@@ -913,7 +913,9 @@ public class GraphIndex {
 
         return tripTimesByWeekdaysPartsList.stream()
                 .sorted(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> "ETKNRLP".indexOf(value.weekdays.charAt(0)))
-                        .thenComparing(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> value.weekdays.length()))).collect(toList());
+                        .thenComparing(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> value.weekdays.length()))
+                        .thenComparing(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> value.tripTimesByWeekdaysList.get(0)
+                                .tripTimeByStopNameList.get(0).tripTimeShort.scheduledDeparture))).collect(toList());
     }
 
     public List<String> tripTimesWeekdaysGroups(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
