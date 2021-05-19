@@ -61,7 +61,7 @@ public class TripTimesByWeekdaysParts {
         public List<TripTimeByStopName> tripTimeByStopNameList = Lists.newArrayList();
 
         public void addTripTimeByWeekdays(TripTimeShort tripTimeShort, Stop stop, String weekdays) {
-            if (this.tripTimeByStopNameList.stream().noneMatch(tripTimeByStop1 -> tripTimeByStop1.stopName.equals(stop.getName()))) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
+            if (this.tripTimeByStopNameList.stream().noneMatch(tripTimeByStop1 -> tripTimeByStop1.tripTimeShort.equals(tripTimeShort))) {//if is same day and trip time add returns true, we added a new time, otherwise need to add dayName to weekdays
                 this.tripTimeByStopNameList.add(new TripTimeByStopName(stop.getName(), tripTimeShort));
             }
         }

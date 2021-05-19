@@ -150,8 +150,13 @@ public class CalendarServiceDataFactoryImpl {
     private List<ServiceCalendarDate> getServiceCalendarDatesForServiceId(FeedScopedId serviceId,
                                                       TimeZone serviceIdTimeZone) {
         ServiceCalendar c = transitService.getCalendarForServiceId(serviceId);
+        Date endDate = c.getEndDate().getAsDate();
+        java.util.Calendar cal = java.util.Calendar.getInstance(serviceIdTimeZone);
+        cal.add(Calendar.DATE, 30);
+        if (cal.getTime().before(endDate))
+            endDate = cal.getTime();
 
-        return filterServiceCalendarDates(transitService.getCalendarDatesForServiceId(serviceId), c.getWeekdaysString(), c.getEndDate());
+        return filterServiceCalendarDates(transitService.getCalendarDatesForServiceId(serviceId), c.getWeekdaysString(), endDate);
     }
 
     public String getDayName(int day) {
@@ -176,7 +181,7 @@ public class CalendarServiceDataFactoryImpl {
         }
     }
 
-    private List<ServiceCalendarDate> filterServiceCalendarDates(List<ServiceCalendarDate> serviceCalendarDates, String weekDays, ServiceDate endDate) {
+    private List<ServiceCalendarDate> filterServiceCalendarDates(List<ServiceCalendarDate> serviceCalendarDates, String weekDays, Date endDate) {
         return serviceCalendarDates.stream().filter(serviceCalendarDate ->
                 (
                         serviceCalendarDate.getExceptionType() == ServiceCalendarDate.EXCEPTION_TYPE_ADD &&
@@ -184,7 +189,7 @@ public class CalendarServiceDataFactoryImpl {
                 ) || (
                         serviceCalendarDate.getExceptionType() == ServiceCalendarDate.EXCEPTION_TYPE_REMOVE &&
                                 weekDays.contains(getDayName(serviceCalendarDate.getDate().getDay()))
-                ) && serviceCalendarDate.getDate().getAsDate().before(endDate.getAsDate())
+                ) && serviceCalendarDate.getDate().getAsDate().before(endDate)
         ).collect(Collectors.toList());
     }
 
