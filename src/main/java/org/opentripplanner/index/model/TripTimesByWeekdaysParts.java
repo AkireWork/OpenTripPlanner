@@ -1,27 +1,33 @@
 package org.opentripplanner.index.model;
 
 import com.google.common.collect.Lists;
+import org.opentripplanner.model.FeedScopedId;
+import org.opentripplanner.model.ServiceCalendar;
 import org.opentripplanner.model.ServiceCalendarDate;
 import org.opentripplanner.model.Stop;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 
 public class TripTimesByWeekdaysParts {
     public static final int MAX_PART_SIZE = 36;
 
+    public String identifier;
     public String weekdays;
     public int parts;
     public List<TripTimesByWeekdays> tripTimesByWeekdaysList = Lists.newArrayList();
     public CalendarDatesByFirstStoptime calendarDatesByFirstStoptime;
+    public List<FeedScopedId> serviceIds = Lists.newArrayList();
 
-    public TripTimesByWeekdaysParts(String weekdaysGroup, int firstStoptime, List<ServiceCalendarDate> serviceCalendarDates) {
+    public TripTimesByWeekdaysParts(String weekdaysGroup, int firstStoptime, List<ServiceCalendarDate> serviceCalendarDates, String identifier, FeedScopedId serviceId) {
         this.parts = 1;
         this.weekdays = weekdaysGroup;
         this.tripTimesByWeekdaysList.add(new TripTimesByWeekdays());
         this.calendarDatesByFirstStoptime = new CalendarDatesByFirstStoptime(firstStoptime, serviceCalendarDates);
+        this.identifier = identifier;
+        this.serviceIds.add(serviceId);
     }
 
     public void addTripTimeByWeekdays(TripTimeShort tripTimeShort, Stop stop, String weekdays) {
@@ -37,15 +43,30 @@ public class TripTimesByWeekdaysParts {
         }
     }
 
-    public boolean containsTrip(int scheduledDeparture, String stopName) {
+    public boolean containsTrip(int scheduledDeparture, String stopName, String identifier) {
         for (TripTimesByWeekdays tripTimesByWeekdays : tripTimesByWeekdaysList) {
             if (!tripTimesByWeekdays.tripTimeByStopNameList.isEmpty()) {
                 TripTimeByStopName tripTimeByStopName = tripTimesByWeekdays.tripTimeByStopNameList.get(0);
-                if (tripTimeByStopName.stopName.equals(stopName) && tripTimeByStopName.tripTimeShort.scheduledDeparture == scheduledDeparture)
+                if (tripTimeByStopName.stopName.equals(stopName) && tripTimeByStopName.tripTimeShort.scheduledDeparture == scheduledDeparture
+                        && this.identifier.equals(identifier))
                     return true;
             }
         }
         return false;
+    }
+
+    public void mergeWeekdays(String weekdays, FeedScopedId serviceId) {
+        this.weekdays = Stream.of(weekdays.split("")).sorted(Comparator.comparingInt("ETKNRLP"::indexOf))
+                .distinct().filter(item-> !item.isEmpty()).collect(Collectors.joining());
+        StringBuilder result = new StringBuilder();
+        if ("ETKNRLP".contains(this.weekdays) && this.weekdays.length() > 2) {
+            char[] chars = this.weekdays.toCharArray();
+            result.append(chars[0]).append("-").append(chars[this.weekdays.length() - 1]);
+        } else {
+            result.append(String.join(",", this.weekdays.split("")));
+        }
+        this.weekdays = result.toString();
+        this.serviceIds.add(serviceId);
     }
 
     @Override

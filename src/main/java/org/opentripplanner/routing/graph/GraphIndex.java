@@ -885,30 +885,14 @@ public class GraphIndex {
         return result;
     }
 
-    public List<TripTimesByWeekdaysParts> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
-        if (pattern == null) {
+    public List<TripTimesByWeekdaysParts> routeTimetable(final Route route, boolean omitNonPickups, boolean omitCanceled) {
+        if (route == null) {
             return null;
         }
         List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList = new ArrayList<>();
-        Date validTill = tripTimesValidTill(pattern).getAsDate();
 
-        Timetable timetable = pattern.scheduledTimetable;
-        for (TripTimes tripTimes : timetable.tripTimes) {
-            if (tripTimesByWeekdaysPartsList.stream().anyMatch(tripTimesByWeekdaysParts1 -> tripTimesByWeekdaysParts1.containsTrip(tripTimes.getScheduledDepartureTime(0), pattern.stopPattern.stops[0].getName())))
-                continue;
-            String weekdaysGroup = graph.getCalendarService().getServiceCalendarForServiceId(tripTimes.trip.getServiceId()).getWeekdaysGroup();
-            List<ServiceCalendarDate> serviceCalendarDates = graph.getCalendarService().getServiceCalendarDatesForServiceId(tripTimes.trip.getServiceId())
-                    .stream().filter(serviceCalendarDate -> serviceCalendarDate.getDate().getAsDate().before(validTill)).collect(toList());
-            TripTimesByWeekdaysParts tripTimesByWeekdaysParts = new TripTimesByWeekdaysParts(
-                    weekdaysGroup, tripTimes.getDepartureTime(0), serviceCalendarDates);
-            int sidx = 0;
-            for (Stop stop : pattern.stopPattern.stops) {
-                if (omitNonPickups && pattern.stopPattern.pickups[sidx] == pattern.stopPattern.PICKDROP_NONE) continue;
-                if (omitCanceled && tripTimes.isTimeCanceled(sidx)) continue;
-                tripTimesByWeekdaysParts.addTripTimeByWeekdays(new TripTimeShort(tripTimes, sidx, stop), stop, weekdaysGroup);
-                sidx++;
-            }
-            tripTimesByWeekdaysPartsList.add(tripTimesByWeekdaysParts);
+        for (TripPattern tripPattern : patternsForRoute.get(route)) {
+            addTriptimesToTripTimesByWeekdaysPartsList(tripPattern.scheduledTimetable, tripTimesByWeekdaysPartsList, tripPattern, omitNonPickups, omitCanceled);
         }
 
         return tripTimesByWeekdaysPartsList.stream()
@@ -916,6 +900,61 @@ public class GraphIndex {
                         .thenComparing(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> value.weekdays.length()))
                         .thenComparing(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> value.tripTimesByWeekdaysList.get(0)
                                 .tripTimeByStopNameList.get(0).tripTimeShort.scheduledDeparture))).collect(toList());
+    }
+
+    public List<TripTimesByWeekdaysParts> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
+        if (pattern == null) {
+            return null;
+        }
+        List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList = new ArrayList<>();
+        addTriptimesToTripTimesByWeekdaysPartsList(pattern.scheduledTimetable, tripTimesByWeekdaysPartsList, pattern, omitNonPickups, omitCanceled);
+
+        return tripTimesByWeekdaysPartsList.stream()
+                .sorted(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> "ETKNRLP".indexOf(value.weekdays.charAt(0)))
+                        .thenComparing(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> value.weekdays.length()))
+                        .thenComparing(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> value.tripTimesByWeekdaysList.get(0)
+                                .tripTimeByStopNameList.get(0).tripTimeShort.scheduledDeparture))).collect(toList());
+    }
+
+    public void addTriptimesToTripTimesByWeekdaysPartsList(Timetable timetable, List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList, TripPattern tripPattern, boolean omitNonPickups, boolean omitCanceled) {
+        Date validTill = tripTimesValidTill(tripPattern).getAsDate();
+
+        for (TripTimes tripTimes : timetable.tripTimes) {
+            Optional<TripTimesByWeekdaysParts> optionalTripTimesByWeekdaysParts = tripTimesByWeekdaysPartsList.stream()
+                    .filter(tripTimesByWeekdaysParts -> tripTimesByWeekdaysParts
+                            .containsTrip(
+                                    tripTimes.getScheduledDepartureTime(0),
+                                    tripPattern.stopPattern.stops[0].getName(),
+                                    "" + tripTimes.getNumStops())
+                    )
+                    .findFirst();
+            String weekdaysGroup = graph.getCalendarService().getServiceCalendarForServiceId(tripTimes.trip.getServiceId()).getWeekdaysGroup();
+            if (optionalTripTimesByWeekdaysParts.isPresent()) {
+                if (!optionalTripTimesByWeekdaysParts.get().serviceIds.contains(tripTimes.trip.getServiceId())) {
+                    optionalTripTimesByWeekdaysParts.get().mergeWeekdays(
+                            optionalTripTimesByWeekdaysParts.get().serviceIds.stream()
+                                    .map(feedScopedId -> graph.getCalendarService().getServiceCalendarForServiceId(feedScopedId).getWeekdaysString()
+                                    ).collect(Collectors.joining("")) +
+                                    graph.getCalendarService().getServiceCalendarForServiceId(tripTimes.trip.getServiceId()).getWeekdaysString(),
+                            tripTimes.trip.getServiceId());
+
+                }
+                continue;
+            }
+            List<ServiceCalendarDate> serviceCalendarDates = graph.getCalendarService().getServiceCalendarDatesForServiceId(tripTimes.trip.getServiceId())
+                    .stream().filter(serviceCalendarDate -> serviceCalendarDate.getDate().getAsDate().before(validTill)).collect(toList());
+            TripTimesByWeekdaysParts tripTimesByWeekdaysParts = new TripTimesByWeekdaysParts(
+                    weekdaysGroup, tripTimes.getDepartureTime(0), serviceCalendarDates, "" + tripTimes.getNumStops(), tripTimes.trip.getServiceId());
+            int sidx = 0;
+            for (Stop stop : tripPattern.stopPattern.stops) {
+                if (omitNonPickups && tripPattern.stopPattern.pickups[sidx] == tripPattern.stopPattern.PICKDROP_NONE)
+                    continue;
+                if (omitCanceled && tripTimes.isTimeCanceled(sidx)) continue;
+                tripTimesByWeekdaysParts.addTripTimeByWeekdays(new TripTimeShort(tripTimes, sidx, stop), stop, weekdaysGroup);
+                sidx++;
+            }
+            tripTimesByWeekdaysPartsList.add(tripTimesByWeekdaysParts);
+        }
     }
 
     public List<String> tripTimesWeekdaysGroups(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {

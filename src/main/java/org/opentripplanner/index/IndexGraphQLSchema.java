@@ -2386,6 +2386,29 @@ public class IndexGraphQLSchema {
                                 .collect(Collectors.toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("routeTimetable")
+                        .type(new GraphQLList(tripTimesByWeekdaysPartsType))
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitNonPickups")
+                                .description("If true, only those departures which allow boarding are returned")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(false)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("omitCanceled")
+                                .description("If false, returns also canceled trips")
+                                .type(Scalars.GraphQLBoolean)
+                                .defaultValue(false)
+                                .build())
+                        .dataFetcher(environment -> {
+                            Route route = environment.getSource();
+                            boolean omitNonPickups = environment.getArgument("omitNonPickups");
+                            boolean omitCanceled = environment.getArgument("omitCanceled");
+
+                            return index.routeTimetable(route, omitNonPickups, omitCanceled);
+                        })
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("alerts")
                         .description("List of alerts which have an effect on the route")
                         .type(new GraphQLList(alertType))

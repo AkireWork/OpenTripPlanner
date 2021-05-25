@@ -157,7 +157,7 @@ public final class ServiceCalendar implements Serializable {
                 + this.wednesday + this.thursday + this.friday + this.saturday + this.sunday + "]>";
     }
 
-    private String replaceDays(String[] daysStrings) {
+    public static String replaceDays(String[] daysStrings) {
         String match = "ETKNRLP";
         StringBuilder result = new StringBuilder();
         for (String days : daysStrings) {
@@ -171,7 +171,7 @@ public final class ServiceCalendar implements Serializable {
         return result.substring(0, result.length() - 1);
     }
 
-    private String collectWeekdaysString(String replaceUnMatchWith) {
+    public String collectWeekdaysString(String replaceUnMatchWith) {
         String result = Stream.of(monday == 1 ? "E" : "",
                 tuesday == 1 ? "T" : replaceUnMatchWith,
                 wednesday == 1 ? "K" : replaceUnMatchWith,
