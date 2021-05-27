@@ -129,9 +129,9 @@ public class CalendarServiceDataFactoryImpl {
         if (c != null) {
             addDatesFromCalendar(c, serviceIdTimeZone, activeDates);
         }
-//        for (ServiceCalendarDate cd : transitService.getCalendarDatesForServiceId(serviceId)) {
-//            addAndRemoveDatesFromCalendarDate(cd, activeDates);
-//        }
+        for (ServiceCalendarDate cd : transitService.getCalendarDatesForServiceId(serviceId)) {
+            addAndRemoveDatesFromCalendarDate(cd, activeDates);
+        }
         return activeDates;
     }
 
