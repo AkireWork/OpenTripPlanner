@@ -18,6 +18,12 @@ public class RouteExtension {
     )
     private String competentAuthority;
 
+    @CsvField(
+            name = "route_desc",
+            optional = true
+    )
+    private String routeDesc;
+
     public String getCompetentAuthority() {
         return competentAuthority;
     }
@@ -26,4 +32,11 @@ public class RouteExtension {
         this.competentAuthority = competentAuthority;
     }
 
+    public String getRouteDesc() {
+        return routeDesc;
+    }
+
+    public void setRouteDesc(String routeDesc) {
+        this.routeDesc = routeDesc;
+    }
 }

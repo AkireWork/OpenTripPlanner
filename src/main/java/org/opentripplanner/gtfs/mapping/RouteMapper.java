@@ -51,6 +51,7 @@ class RouteMapper {
         if (extension != null) {
             Map<String, String> authorities = COMPETENT_AUTHORITY_TABLE.getAuthorities();
             lhs.setCompetentAuthority(authorities.getOrDefault(extension.getCompetentAuthority(), ""));
+            lhs.setRouteDesc(extension.getRouteDesc());
         }
 
         return lhs;

@@ -2415,6 +2415,12 @@ public class IndexGraphQLSchema {
                         .dataFetcher(dataFetchingEnvironment -> index.getAlertsForRoute(
                                 dataFetchingEnvironment.getSource()))
                         .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("description")
+                        .description("Description of the route")
+                        .type(Scalars.GraphQLString)
+                        .dataFetcher(environment -> environment.<Route>getSource().getRouteDesc())
+                        .build())
                 .build();
 
         feedType = GraphQLObjectType.newObject()
