@@ -39,7 +39,8 @@ public class TartuBicycleRentDataSource extends GenericJsonBikeRentalDataSource 
 
             String proto = url2.getProtocol();
             if (proto.equals("http") || proto.equals("https")) {
-                data = HttpUtils.getPostData(super.getUrl(), "Content-Type", "application/json", new StringEntity("{}"));
+                data = HttpUtils.getPostData(super.getUrl(), "Content-Type", "application/json",
+                        new StringEntity("{\"isPublic\": true, \"limit\": -1}"));
             } else {
                 // Local file probably, try standard java
                 data = url2.openStream();
