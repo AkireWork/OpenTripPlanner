@@ -37,6 +37,8 @@ public final class Stop extends IdentityBean<FeedScopedId> {
 
     private String platformCode;
 
+    private String stopArea;
+
     public Stop() {
 
     }
@@ -190,5 +192,13 @@ public final class Stop extends IdentityBean<FeedScopedId> {
 
     public void setPlatformCode(String platformCode) {
         this.platformCode = platformCode;
+    }
+
+    public String getStopArea() {
+        return stopArea;
+    }
+
+    public void setStopArea(String stopArea) {
+        this.stopArea = stopArea;
     }
 }

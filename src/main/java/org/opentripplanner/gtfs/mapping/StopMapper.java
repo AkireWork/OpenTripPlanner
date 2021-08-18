@@ -1,6 +1,7 @@
 package org.opentripplanner.gtfs.mapping;
 
 import org.opentripplanner.model.Stop;
+import org.opentripplanner.model.StopExtension;
 import org.opentripplanner.util.MapUtils;
 
 import java.util.Collection;
@@ -24,6 +25,7 @@ class StopMapper {
 
     private Stop doMap(org.onebusaway.gtfs.model.Stop rhs) {
         Stop lhs = new Stop();
+        StopExtension extension = rhs.getExtension(StopExtension.class);
 
         lhs.setId(mapAgencyAndId(rhs.getId()));
         lhs.setName(rhs.getName());
@@ -40,6 +42,9 @@ class StopMapper {
         lhs.setTimezone(rhs.getTimezone());
         lhs.setVehicleType(rhs.getVehicleType());
         lhs.setPlatformCode(rhs.getPlatformCode());
+        if (extension != null) {
+            lhs.setStopArea(extension.getStopArea());
+        }
 
         return lhs;
     }
