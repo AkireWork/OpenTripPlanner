@@ -44,6 +44,12 @@ public class CalendarServiceImpl implements CalendarService {
     }
 
     @Override
+    public ServiceDate getServiceStartDateForServiceId(FeedScopedId serviceId) {
+        CalendarServiceData allData = getData();
+        return allData.getServiceStartDateForServiceId(serviceId);
+    }
+
+    @Override
     public ServiceDate getServiceEndDateForServiceId(FeedScopedId serviceId) {
         CalendarServiceData allData = getData();
         return allData.getServiceEndDateForServiceId(serviceId);

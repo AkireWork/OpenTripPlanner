@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyList;
+import static java.util.stream.Collectors.toList;
 
 public class IndexGraphQLSchema {
 
@@ -265,6 +266,8 @@ public class IndexGraphQLSchema {
     public GraphQLOutputType planType = new GraphQLTypeReference("Plan");
 
     public GraphQLOutputType tripTimesByWeekdaysPartsType;
+
+    public GraphQLOutputType serviceValidityType;
 
     public GraphQLOutputType tripTimesByWeekdaysType;
 
@@ -1218,7 +1221,7 @@ public class IndexGraphQLSchema {
                         .type(new GraphQLList(Scalars.GraphQLString))
                         .dataFetcher(environment -> ((TripTimesByWeekdaysParts.CalendarDateException) environment.getSource()).dates.stream()
                                 .sorted(Comparator.comparing(date -> date)).map(date -> new SimpleDateFormat("dd.MM.yyyy").format(date))
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .build();
 
@@ -1247,6 +1250,31 @@ public class IndexGraphQLSchema {
                         .build())
                 .build();
 
+        serviceValidityType = GraphQLObjectType.newObject()
+          .name("ServiceValidityType")
+          .description("Service validity date range")
+          .field(GraphQLFieldDefinition.newFieldDefinition()
+            .name("validFrom")
+            .type(Scalars.GraphQLString)
+            .dataFetcher(environment -> new SimpleDateFormat("dd.MM.yyyy")
+              .format(
+                ((List<FeedScopedId>) environment.getSource()).stream()
+                  .map(serviceId -> index.graph.getCalendarService().getServiceStartDateForServiceId(serviceId).getAsDate())
+                  .max(Date::compareTo).get()
+              ))
+            .build())
+          .field(GraphQLFieldDefinition.newFieldDefinition()
+            .name("validTill")
+            .type(Scalars.GraphQLString)
+            .dataFetcher(environment -> new SimpleDateFormat("dd.MM.yyyy")
+              .format(
+                ((List<FeedScopedId>) environment.getSource()).stream()
+                  .map(serviceId -> index.graph.getCalendarService().getServiceEndDateForServiceId(serviceId).getAsDate())
+                  .min(Date::compareTo).get()
+              ))
+            .build())
+          .build();
+
         tripTimesByWeekdaysPartsType = GraphQLObjectType.newObject()
                 .name("TripTimesByWeekdaysParts")
                 .description("Chunks of TripTimes by stop names for week grouped by weekdays")
@@ -1269,6 +1297,11 @@ public class IndexGraphQLSchema {
                         .name("tripTimesByWeekdaysList")
                         .type(new GraphQLList(tripTimesByWeekdaysType))
                         .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).tripTimesByWeekdaysList)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("validity")
+                        .type(serviceValidityType)
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).serviceIds)
                         .build())
                 .build();
 
@@ -1498,7 +1531,7 @@ public class IndexGraphQLSchema {
                                 .stream()
                                 .map(pattern -> pattern.route)
                                 .distinct()
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("patterns")
@@ -1522,7 +1555,7 @@ public class IndexGraphQLSchema {
                                 .filter(edge -> edge instanceof SimpleTransfer)
                                 .filter(edge -> environment.getArgument("maxDistance") == null || edge.getDistance() <= (Integer) environment.getArgument("maxDistance"))
                                 .map(edge -> new GraphIndex.StopAndDistance(((TransitVertex) edge.getToVertex()).getStop(), (int) Math.round(edge.getDistance())))
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("stopArea")
@@ -1566,7 +1599,7 @@ public class IndexGraphQLSchema {
                                         .get(stop.getId())
                                         .stream()
                                         .flatMap(singleStop -> index.getStopTimesForStop(singleStop, date, omitNonPickups, omitCanceled).stream())
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             }
                             return index.getStopTimesForStop(stop, date, omitNonPickups, omitCanceled);
                         })
@@ -1620,7 +1653,7 @@ public class IndexGraphQLSchema {
                                                         environment.getArgument("omitCanceled"))
                                                         .stream()
                                         )
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             }
                             return index.stopTimesForStop(stop,
                                     environment.getArgument("startTime"),
@@ -1693,7 +1726,7 @@ public class IndexGraphQLSchema {
                             return stream.flatMap(stoptimesWithPattern -> stoptimesWithPattern.times.stream())
                                     .sorted(Comparator.comparing(t -> t.serviceDay + t.realtimeDeparture))
                                     .limit((long) (int) environment.getArgument("numberOfDepartures"))
-                                    .collect(Collectors.toList());
+                                    .collect(toList());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -1863,7 +1896,7 @@ public class IndexGraphQLSchema {
                                 .getServiceDatesForServiceId((((Trip) environment.getSource()).getServiceId()))
                                 .stream()
                                 .map(ServiceDate::getAsString)
-                                .collect(Collectors.toList())
+                                .collect(toList())
                         )
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -2049,13 +2082,19 @@ public class IndexGraphQLSchema {
                                 .type(Scalars.GraphQLBoolean)
                                 .defaultValue(false)
                                 .build())
+                        .argument(GraphQLArgument.newArgument()
+                                .name("stopId")
+                                .description("The id of the stop to filter out stop times")
+                                .type(Scalars.GraphQLString)
+                                .build())
                         .dataFetcher(environment -> {
                             Trip trip = environment.getSource();
                             TripPattern tripPattern = index.patternForTrip.get(trip);
                             boolean omitNonPickups = environment.getArgument("omitNonPickups");
                             boolean omitCanceled = environment.getArgument("omitCanceled");
+                            String stopId = environment.getArgument("stopId");
 
-                            return index.tripTimesByStopNamesForWeek(tripPattern, omitNonPickups, omitCanceled);
+                            return index.tripTimesByStopNamesForWeek(tripPattern, omitNonPickups, omitCanceled, stopId);
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -2105,7 +2144,7 @@ public class IndexGraphQLSchema {
                                     }
                                     return Arrays.stream(geometry.getCoordinateSequence().toCoordinateArray())
                                             .map(coordinate -> Arrays.asList(coordinate.x, coordinate.y))
-                                            .collect(Collectors.toList());
+                                            .collect(toList());
                                 }
                         )
                         .build())
@@ -2231,7 +2270,7 @@ public class IndexGraphQLSchema {
                                         .stream()
                                         .filter(times -> services.get(times.serviceCode))
                                         .map(times -> times.trip)
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             } catch (ParseException e) {
                                 return null; // Invalid date format
                             }
@@ -2376,7 +2415,7 @@ public class IndexGraphQLSchema {
                                 .map(TripPattern::getStops)
                                 .flatMap(Collection::stream)
                                 .distinct()
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("trips")
@@ -2388,7 +2427,7 @@ public class IndexGraphQLSchema {
                                 .map(TripPattern::getTrips)
                                 .flatMap(Collection::stream)
                                 .distinct()
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("routeTimetable")
@@ -2498,7 +2537,7 @@ public class IndexGraphQLSchema {
                         .dataFetcher(environment -> index.routeForId.values()
                                 .stream()
                                 .filter(route -> route.getAgency().getFeedScopeId().equals(((Agency) environment.getSource()).getFeedScopeId()))
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("alerts")
@@ -2937,14 +2976,14 @@ public class IndexGraphQLSchema {
                                 if (environment.getArguments().entrySet()
                                         .stream()
                                         .filter(stringObjectEntry -> stringObjectEntry.getValue() != null)
-                                        .collect(Collectors.toList())
+                                        .collect(toList())
                                         .size() != 1) {
                                     throw new IllegalArgumentException("Unable to combine other filters with ids");
                                 }
                                 return ((List<String>) environment.getArgument("ids"))
                                         .stream()
                                         .map(id -> index.stopForId.get(FeedScopedId.convertFromString(id)))
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             }
                             Stream<Stop> stream;
                             if (environment.getArgument("name") == null) {
@@ -2962,7 +3001,7 @@ public class IndexGraphQLSchema {
                                         .stream()
                                         .map(result -> index.stopForId.get(FeedScopedId.convertFromString(result.id)));
                             }
-                            return stream.collect(Collectors.toList());
+                            return stream.collect(toList());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3010,7 +3049,7 @@ public class IndexGraphQLSchema {
                                 .filter(stop -> (environment.getArgument("agency") == null && environment.getArgument("feeds") == null) ||
                                         stop.getId().getAgencyId().equalsIgnoreCase(environment.getArgument("agency")) || (environment.getArgument("feeds") instanceof List && ((List) environment.getArgument("feeds")).contains(stop.getId().getAgencyId()))
                                 )
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("stopsByRadius")
@@ -3056,7 +3095,7 @@ public class IndexGraphQLSchema {
                                                 stopAndDistance.stop.getId().getAgencyId().equalsIgnoreCase(environment.getArgument("agency")) || (environment.getArgument("feeds") instanceof List && ((List) environment.getArgument("feeds")).contains(stopAndDistance.stop.getId().getAgencyId()))
                                         )
                                         .sorted(Comparator.comparing(s -> s.distance))
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             } catch (VertexNotFoundException e) {
                                 stops = Collections.emptyList();
                             }
@@ -3211,14 +3250,14 @@ public class IndexGraphQLSchema {
                                 if (environment.getArguments().entrySet()
                                         .stream()
                                         .filter(stringObjectEntry -> stringObjectEntry.getValue() != null)
-                                        .collect(Collectors.toList())
+                                        .collect(toList())
                                         .size() != 1) {
                                     throw new IllegalArgumentException("Unable to combine other filters with ids");
                                 }
                                 return ((List<String>) environment.getArgument("ids"))
                                         .stream()
                                         .map(id -> index.stationForId.get(FeedScopedId.convertFromString(id)))
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             }
 
                             Stream<Stop> stream;
@@ -3238,7 +3277,7 @@ public class IndexGraphQLSchema {
                                         .map(result -> index.stationForId.get(FeedScopedId.convertFromString(result.id)));
                             }
 
-                            return stream.collect(Collectors.toList());
+                            return stream.collect(toList());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3280,14 +3319,14 @@ public class IndexGraphQLSchema {
                                 if (environment.getArguments().entrySet()
                                         .stream()
                                         .filter(stringObjectEntry -> stringObjectEntry.getValue() != null)
-                                        .collect(Collectors.toList())
+                                        .collect(toList())
                                         .size() != 1) {
                                     throw new IllegalArgumentException("Unable to combine other filters with ids");
                                 }
                                 return ((List<String>) environment.getArgument("ids"))
                                         .stream()
                                         .map(id -> index.routeForId.get(FeedScopedId.convertFromString(id)))
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             }
                             Stream<Route> stream = index.routeForId.values().stream();
                             if (environment.getArgument("feeds") instanceof List) {
@@ -3322,7 +3361,7 @@ public class IndexGraphQLSchema {
                                 if (environment.getArguments().entrySet()
                                         .stream()
                                         .filter(stringObjectEntry -> stringObjectEntry.getValue() != null)
-                                        .collect(Collectors.toList())
+                                        .collect(toList())
                                         .size() != 1) {
                                     throw new IllegalArgumentException("Unable to combine other filters with ids");
                                 }
@@ -3331,7 +3370,7 @@ public class IndexGraphQLSchema {
                                         .filter(route -> ((List<String>) environment.getArgument("competentAuthority"))
                                                 .contains(route.getCompetentAuthority())
                                         )
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             } else if (environment.getArgument("competentAuthority") != null) {
                                 stream = stream
                                         .filter(route -> route.getCompetentAuthority() != null)
@@ -3340,7 +3379,7 @@ public class IndexGraphQLSchema {
                                         );
                             }
 
-                            return stream.collect(Collectors.toList());
+                            return stream.collect(toList());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3371,7 +3410,7 @@ public class IndexGraphQLSchema {
                                                 trip.getId().getAgencyId())
                                         );
                             }
-                            return stream.collect(Collectors.toList());
+                            return stream.collect(toList());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3563,7 +3602,7 @@ public class IndexGraphQLSchema {
                                 patterns = feedIds.stream()
                                         .distinct()
                                         .flatMap(feedId -> index.patternsForFeedId.get(feedId).stream())
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             } else if (routeIds != null) {
                                 patterns = routeIds.stream()
                                         .distinct()
@@ -3571,12 +3610,12 @@ public class IndexGraphQLSchema {
                                             final Route route = index.routeForId.get(FeedScopedId.convertFromString(routeId));
                                             return index.patternsForRoute.get(route).stream();
                                         })
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             } else if (patternIds != null) {
                                 patterns = patternIds.stream()
                                         .distinct()
                                         .map(patternId -> index.patternForId.get(patternId))
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             } else if (tripIds != null) {
                                 patterns = tripIds.stream()
                                         .distinct()
@@ -3584,7 +3623,7 @@ public class IndexGraphQLSchema {
                                             final Trip trip = index.tripForId.get(FeedScopedId.convertFromString(tripId));
                                             return index.patternForTrip.get(trip);
                                         })
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             } else {
                                 patterns = index.patternForId.values();
                             }
@@ -3667,7 +3706,7 @@ public class IndexGraphQLSchema {
                                     .filter(alert -> environment.getArgument("cause") == null || ((List) environment.getArgument("cause")).contains(alert.getAlert().cause))
                                     .filter(alert -> environment.getArgument("route") == null || (alert.getRoute() != null && ((List) environment.getArgument("route")).contains(FeedScopedId.convertToString(alert.getRoute()))))
                                     .filter(alert -> environment.getArgument("stop") == null || (alert.getStop() != null && ((List) environment.getArgument("stop")).contains(FeedScopedId.convertToString(alert.getStop()))))
-                                    .collect(Collectors.toList());
+                                    .collect(toList());
                         })
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
@@ -3696,7 +3735,7 @@ public class IndexGraphQLSchema {
                                 return ((List<String>) environment.getArgument("ids"))
                                         .stream()
                                         .map(rentalStations::get)
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             }
                             return new ArrayList<>(index.graph.getService(BikeRentalStationService.class) != null
                                     ? index.graph.getService(BikeRentalStationService.class).getBikeRentalStations()
@@ -3763,7 +3802,7 @@ public class IndexGraphQLSchema {
                                 return ((List<String>) environment.getArgument("ids"))
                                         .stream()
                                         .map(carParks::get)
-                                        .collect(Collectors.toList());
+                                        .collect(toList());
                             }
                             return new ArrayList<>(index.graph.getService(CarParkService.class) != null
                                     ? index.graph.getService(CarParkService.class).getCarParks()
@@ -3820,14 +3859,14 @@ public class IndexGraphQLSchema {
         final List<String> parameterList = Arrays.asList(parameters);
         final int parameterCount = environment.getArguments().entrySet().stream()
                 .filter(entrySet -> parameterList.contains(entrySet.getKey()) && entrySet.getValue() != null)
-                .collect(Collectors.toList())
+                .collect(toList())
                 .size();
         return parameterCount;
     }
 
     private List<FeedScopedId> toIdList(List<String> ids) {
         if (ids == null) return Collections.emptyList();
-        return ids.stream().map(FeedScopedId::convertFromString).collect(Collectors.toList());
+        return ids.stream().map(FeedScopedId::convertFromString).collect(toList());
     }
 
     private void createPlanType(GraphIndex index) {
@@ -4057,7 +4096,7 @@ public class IndexGraphQLSchema {
                                 .filter(place -> place.stopId != null)
                                 .map(placeWithStop -> index.stopForId.get(placeWithStop.stopId))
                                 .filter(Objects::nonNull)
-                                .collect(Collectors.toList()))
+                                .collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("intermediatePlaces")
@@ -4170,7 +4209,7 @@ public class IndexGraphQLSchema {
                                                 .routes
                                                 .stream()
                                                 .map(index.routeForId::get)
-                                                .collect(Collectors.toList()))
+                                                .collect(toList()))
                                         .build())
                                 .build()))
                         .dataFetcher(new PropertyDataFetcher("details"))
@@ -4236,7 +4275,7 @@ public class IndexGraphQLSchema {
                                 result.put("fare", fare.getFare(fareKey));
                                 result.put("details", fare.getDetails(fareKey));
                                 return result;
-                            }).collect(Collectors.toList());
+                            }).collect(toList());
                             return results;
                         })
                         .build())
@@ -4285,7 +4324,7 @@ public class IndexGraphQLSchema {
                         .description("A list of possible error messages as enum")
                         .type(new GraphQLNonNull(new GraphQLList(Scalars.GraphQLString)))
                         .dataFetcher(environment -> ((List<Message>) ((Map) environment.getSource()).get("messages"))
-                                .stream().map(Enum::name).collect(Collectors.toList()))
+                                .stream().map(Enum::name).collect(toList()))
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()
                         .name("messageStrings")
@@ -4295,7 +4334,7 @@ public class IndexGraphQLSchema {
                                 .stream()
                                 .map(message -> message.get(ResourceBundleSingleton.INSTANCE.getLocale(
                                         environment.getArgument("locale"))))
-                                .collect(Collectors.toList())
+                                .collect(toList())
                         )
                         .build())
                 .field(GraphQLFieldDefinition.newFieldDefinition()

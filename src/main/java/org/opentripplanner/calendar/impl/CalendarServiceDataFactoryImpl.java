@@ -89,6 +89,7 @@ public class CalendarServiceDataFactoryImpl {
 
             data.putServiceDatesForServiceId(serviceId, serviceDates);
 
+            data.putServiceStartDateForServiceId(serviceId, getServiceStartDateForServiceId(serviceId, serviceIdTimeZone));
             data.putServiceEndDateForServiceId(serviceId, getServiceEndDateForServiceId(serviceId, serviceIdTimeZone));
 
             data.putServiceCalendarDatesForServiceId(serviceId, getServiceCalendarDatesForServiceId(serviceId, serviceIdTimeZone));
@@ -133,6 +134,13 @@ public class CalendarServiceDataFactoryImpl {
             addAndRemoveDatesFromCalendarDate(cd, activeDates);
         }
         return activeDates;
+    }
+
+    private ServiceDate getServiceStartDateForServiceId(FeedScopedId serviceId,
+                                                         TimeZone serviceIdTimeZone) {
+        ServiceCalendar c = transitService.getCalendarForServiceId(serviceId);
+
+        return c.getStartDate();
     }
 
     private ServiceDate getServiceEndDateForServiceId(FeedScopedId serviceId,

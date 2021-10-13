@@ -892,7 +892,7 @@ public class GraphIndex {
         List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList = new ArrayList<>();
 
         for (TripPattern tripPattern : patternsForRoute.get(route)) {
-            addTriptimesToTripTimesByWeekdaysPartsList(tripPattern.scheduledTimetable, tripTimesByWeekdaysPartsList, tripPattern, omitNonPickups, omitCanceled);
+            addTriptimesToTripTimesByWeekdaysPartsList(tripPattern.scheduledTimetable, tripTimesByWeekdaysPartsList, tripPattern, omitNonPickups, omitCanceled, null);
         }
 
         return tripTimesByWeekdaysPartsList.stream()
@@ -902,12 +902,12 @@ public class GraphIndex {
                                 .tripTimeByStopNameList.get(0).tripTimeShort.scheduledDeparture))).collect(toList());
     }
 
-    public List<TripTimesByWeekdaysParts> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled) {
+    public List<TripTimesByWeekdaysParts> tripTimesByStopNamesForWeek(final TripPattern pattern, boolean omitNonPickups, boolean omitCanceled, String stopId) {
         if (pattern == null) {
             return null;
         }
         List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList = new ArrayList<>();
-        addTriptimesToTripTimesByWeekdaysPartsList(pattern.scheduledTimetable, tripTimesByWeekdaysPartsList, pattern, omitNonPickups, omitCanceled);
+        addTriptimesToTripTimesByWeekdaysPartsList(pattern.scheduledTimetable, tripTimesByWeekdaysPartsList, pattern, omitNonPickups, omitCanceled, stopId);
 
         return tripTimesByWeekdaysPartsList.stream()
                 .sorted(Comparator.comparingInt((TripTimesByWeekdaysParts value) -> "ETKNRLP".indexOf(value.weekdays.charAt(0)))
@@ -916,7 +916,7 @@ public class GraphIndex {
                                 .tripTimeByStopNameList.get(0).tripTimeShort.scheduledDeparture))).collect(toList());
     }
 
-    public void addTriptimesToTripTimesByWeekdaysPartsList(Timetable timetable, List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList, TripPattern tripPattern, boolean omitNonPickups, boolean omitCanceled) {
+    public void addTriptimesToTripTimesByWeekdaysPartsList(Timetable timetable, List<TripTimesByWeekdaysParts> tripTimesByWeekdaysPartsList, TripPattern tripPattern, boolean omitNonPickups, boolean omitCanceled, String stopId) {
         Date validTill = tripTimesValidTill(tripPattern).getAsDate();
 
         for (TripTimes tripTimes : timetable.tripTimes) {
@@ -950,7 +950,9 @@ public class GraphIndex {
                 if (omitNonPickups && tripPattern.stopPattern.pickups[sidx] == tripPattern.stopPattern.PICKDROP_NONE)
                     continue;
                 if (omitCanceled && tripTimes.isTimeCanceled(sidx)) continue;
-                tripTimesByWeekdaysParts.addTripTimeByWeekdays(new TripTimeShort(tripTimes, sidx, stop), stop, weekdaysGroup);
+                if (stopId == null || stopId.equals(stop.getId().toString())) {
+                    tripTimesByWeekdaysParts.addTripTimeByWeekdays(new TripTimeShort(tripTimes, sidx, stop), stop, weekdaysGroup);
+                }
                 sidx++;
             }
             tripTimesByWeekdaysPartsList.add(tripTimesByWeekdaysParts);
