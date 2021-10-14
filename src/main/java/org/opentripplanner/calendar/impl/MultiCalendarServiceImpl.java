@@ -36,6 +36,10 @@ public class MultiCalendarServiceImpl extends CalendarServiceImpl {
             _data.putServiceEndDateForServiceId(serviceId,
                     data.getServiceEndDateForServiceId(serviceId));
         }
+        for (FeedScopedId serviceId : data.getStartDatesServiceIds()) {
+            _data.putServiceStartDateForServiceId(serviceId,
+                    data.getServiceStartDateForServiceId(serviceId));
+        }
         for (FeedScopedId serviceId : data.getCalendarDatesServiceIds()) {
             _data.putServiceCalendarDatesForServiceId(serviceId,
                     data.getServiceCalendarDatesForServiceId(serviceId));

@@ -22,6 +22,12 @@ public interface CalendarService {
 
     /**
      * @param serviceId the target service id
+     * @return the service start date for the specified service id
+     */
+    ServiceDate getServiceStartDateForServiceId(FeedScopedId serviceId);
+
+    /**
+     * @param serviceId the target service id
      * @return the service end date for the specified service id
      */
     ServiceDate getServiceEndDateForServiceId(FeedScopedId serviceId);

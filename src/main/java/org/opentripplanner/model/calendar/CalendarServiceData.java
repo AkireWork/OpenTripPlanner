@@ -26,6 +26,8 @@ public class CalendarServiceData implements Serializable {
 
     private Map<FeedScopedId, List<ServiceDate>> serviceEndDateByServiceId = new HashMap<>();
 
+    private Map<FeedScopedId, List<ServiceDate>> serviceStartDateByServiceId = new HashMap<>();
+
     private Map<FeedScopedId, List<ServiceCalendarDate>> serviceCalendarDateByServiceId = new HashMap<>();
 
     private Map<FeedScopedId, ServiceCalendar> serviceCalendarByServiceId = new HashMap<>();
@@ -53,6 +55,10 @@ public class CalendarServiceData implements Serializable {
 
     public Set<FeedScopedId> getEndDatesServiceIds() {
         return Collections.unmodifiableSet(serviceEndDateByServiceId.keySet());
+    }
+
+    public Set<FeedScopedId> getStartDatesServiceIds() {
+        return Collections.unmodifiableSet(serviceStartDateByServiceId.keySet());
     }
 
     public Set<FeedScopedId> getCalendarDatesServiceIds() {
@@ -97,6 +103,16 @@ public class CalendarServiceData implements Serializable {
         List<ServiceDate> serviceDates = new ArrayList<>();
         serviceDates.add(serviceDate);
         serviceEndDateByServiceId.put(serviceId, Collections.unmodifiableList(serviceDates));
+    }
+
+    public void putServiceStartDateForServiceId(FeedScopedId serviceId, ServiceDate serviceDate) {
+        List<ServiceDate> serviceDates = new ArrayList<>();
+        serviceDates.add(serviceDate);
+        serviceStartDateByServiceId.put(serviceId, Collections.unmodifiableList(serviceDates));
+    }
+
+    public ServiceDate getServiceStartDateForServiceId(FeedScopedId serviceId) {
+        return serviceStartDateByServiceId.get(serviceId).get(0);
     }
 
     public ServiceDate getServiceEndDateForServiceId(FeedScopedId serviceId) {
