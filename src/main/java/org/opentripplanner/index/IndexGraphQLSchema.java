@@ -3190,9 +3190,9 @@ public class IndexGraphQLSchema {
                             if (filterByIds != null) {
                                 filterByStops = toIdList(((List<String>) filterByIds.get("stops")));
                                 filterByRoutes = toIdList(((List<String>) filterByIds.get("routes")));
-                                filterByBikeRentalStations = filterByIds.get("bikeRentalStations") != null ? (List<String>) filterByIds.get("bikeRentalStations") : Collections.emptyList();
-                                filterByBikeParks = filterByIds.get("bikeParks") != null ? (List<String>) filterByIds.get("bikeParks") : Collections.emptyList();
-                                filterByCarParks = filterByIds.get("carParks") != null ? (List<String>) filterByIds.get("carParks") : Collections.emptyList();
+                                filterByBikeRentalStations = filterByIds.get("bikeRentalStations") != null ? (List<String>) filterByIds.get("bikeRentalStations") : emptyList();
+                                filterByBikeParks = filterByIds.get("bikeParks") != null ? (List<String>) filterByIds.get("bikeParks") : emptyList();
+                                filterByCarParks = filterByIds.get("carParks") != null ? (List<String>) filterByIds.get("carParks") : emptyList();
                             }
 
                             List<TraverseMode> filterByModes = environment.getArgument("filterByModes");
@@ -3214,7 +3214,7 @@ public class IndexGraphQLSchema {
                                         filterByCarParks
                                 ));
                             } catch (VertexNotFoundException e) {
-                                places = Collections.emptyList();
+                                places = emptyList();
                             }
 
                             return new SimpleListConnection(places).get(environment);
@@ -3331,6 +3331,11 @@ public class IndexGraphQLSchema {
                                 .type(Scalars.GraphQLString)
                                 .build())
                         .argument(GraphQLArgument.newArgument()
+                                .name("longName")
+                                .description("Query routes by this longName or name")
+                                .type(Scalars.GraphQLString)
+                                .build())
+                        .argument(GraphQLArgument.newArgument()
                                 .name("modes")
                                 .description("Deprecated, use argument `transportModes` instead.")
                                 .type(Scalars.GraphQLString)
@@ -3371,6 +3376,15 @@ public class IndexGraphQLSchema {
                                         .filter(route -> route.getShortName() != null)
                                         .filter(route -> route.getShortName().toLowerCase().startsWith(
                                                 ((String) environment.getArgument("name")).toLowerCase())
+                                        );
+                            }
+                            if (environment.getArgument("longName") != null) {
+                                stream = stream
+                                        .filter(route -> (route.getShortName() != null && route.getShortName().toLowerCase().startsWith(
+                                                ((String) environment.getArgument("longName")).toLowerCase()))
+                                                ||
+                                                (route.getLongName() != null && Arrays.stream(route.getLongName().toLowerCase().split("\\s+"))
+                                                        .anyMatch(point-> point.startsWith(((String) environment.getArgument("longName")).toLowerCase())))
                                         );
                             }
                             if (environment.getArgument("modes") != null && !(environment.getArgument("transportModes") instanceof List)) {
