@@ -19,3 +19,4 @@ Narva LV,Narva linn
 Hiiu MV,Hiiumaa
 Pärnu MV,Pärnumaa
 Sillamäe LV,Sillamäe linn
+Rakvere linn,Rakvere linnaliin
