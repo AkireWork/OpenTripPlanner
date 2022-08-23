@@ -948,8 +948,8 @@ public class GraphIndex {
             Optional<TripTimesByWeekdaysParts> optionalTripTimesByWeekdaysParts = tripTimesByWeekdaysPartsList.stream()
                     .filter(tripTimesByWeekdaysParts -> tripTimesByWeekdaysParts
                             .containsTrip(
-                                    tripTimes.getScheduledDepartureTime(0),
-                                    tripPattern.stopPattern.stops[0].getName(),
+                                    tripTimes,
+                                    tripPattern.stopPattern.stops,
                                     "" + tripTimes.getNumStops())
                     )
                     .findFirst();

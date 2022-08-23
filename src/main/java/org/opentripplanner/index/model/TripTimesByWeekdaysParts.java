@@ -5,6 +5,7 @@ import org.opentripplanner.model.FeedScopedId;
 import org.opentripplanner.model.ServiceCalendar;
 import org.opentripplanner.model.ServiceCalendarDate;
 import org.opentripplanner.model.Stop;
+import org.opentripplanner.routing.trippattern.TripTimes;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -43,13 +44,21 @@ public class TripTimesByWeekdaysParts {
         }
     }
 
-    public boolean containsTrip(int scheduledDeparture, String stopName, String identifier) {
+    public boolean containsTrip(TripTimes tripTimes, Stop[] stops, String identifier) {
         for (TripTimesByWeekdays tripTimesByWeekdays : tripTimesByWeekdaysList) {
             if (!tripTimesByWeekdays.tripTimeByStopNameList.isEmpty()) {
                 TripTimeByStopName tripTimeByStopName = tripTimesByWeekdays.tripTimeByStopNameList.get(0);
-                if (tripTimeByStopName.stopName.equals(stopName) && tripTimeByStopName.tripTimeShort.scheduledDeparture == scheduledDeparture
-                        && this.identifier.equals(identifier))
+                if (tripTimeByStopName.tripTimeShort.scheduledDeparture != tripTimes.getScheduledDepartureTime(0) || !this.identifier.equals(identifier) || !tripTimeByStopName.stopName.equals(stops[0].getName())) {
+                    return false;
+                } else {
+                    for (int i = 1; i < tripTimes.getNumStops(); i++) {
+                        tripTimeByStopName = tripTimesByWeekdays.tripTimeByStopNameList.get(i);
+                        if (!tripTimeByStopName.stopName.equals(stops[i].getName()) || tripTimeByStopName.tripTimeShort.scheduledDeparture != tripTimes.getScheduledDepartureTime(i)) {
+                            return false;
+                        }
+                    }
                     return true;
+                }
             }
         }
         return false;
