@@ -5,8 +5,10 @@ import org.opentripplanner.model.FeedScopedId;
 import org.opentripplanner.model.ServiceCalendar;
 import org.opentripplanner.model.ServiceCalendarDate;
 import org.opentripplanner.model.Stop;
+import org.opentripplanner.model.calendar.ServiceDate;
 import org.opentripplanner.routing.trippattern.TripTimes;
 
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -21,13 +23,17 @@ public class TripTimesByWeekdaysParts {
     public List<TripTimesByWeekdays> tripTimesByWeekdaysList = Lists.newArrayList();
     public CalendarDatesByFirstStoptime calendarDatesByFirstStoptime;
     public List<FeedScopedId> serviceIds = Lists.newArrayList();
+    public String validFrom;
+    public String validTill;
 
-    public TripTimesByWeekdaysParts(String weekdaysGroup, int firstStoptime, List<ServiceCalendarDate> serviceCalendarDates, String identifier, FeedScopedId serviceId) {
+    public TripTimesByWeekdaysParts(String weekdaysGroup, int firstStoptime, List<ServiceCalendarDate> serviceCalendarDates, String identifier, FeedScopedId serviceId, ServiceDate validFrom, ServiceDate validTill) {
         this.parts = 1;
         this.weekdays = weekdaysGroup;
         this.tripTimesByWeekdaysList.add(new TripTimesByWeekdays());
         this.calendarDatesByFirstStoptime = new CalendarDatesByFirstStoptime(firstStoptime, serviceCalendarDates);
         this.identifier = identifier;
+        this.validFrom = new SimpleDateFormat("dd.MM.yyyy").format(validFrom.getAsDate());
+        this.validTill = new SimpleDateFormat("dd.MM.yyyy").format(validTill.getAsDate());
         this.serviceIds.add(serviceId);
     }
 

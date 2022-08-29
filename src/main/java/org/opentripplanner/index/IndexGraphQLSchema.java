@@ -1301,6 +1301,16 @@ public class IndexGraphQLSchema {
                         .type(new GraphQLList(tripTimesByWeekdaysType))
                         .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).tripTimesByWeekdaysList)
                         .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("validFrom")
+                        .type(new GraphQLNonNull(Scalars.GraphQLString))
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).validFrom)
+                        .build())
+                .field(GraphQLFieldDefinition.newFieldDefinition()
+                        .name("validTill")
+                        .type(new GraphQLNonNull(Scalars.GraphQLString))
+                        .dataFetcher(environment -> ((TripTimesByWeekdaysParts) environment.getSource()).validTill)
+                        .build())
                 .build();
 
         clusterType = GraphQLObjectType.newObject()

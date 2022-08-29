@@ -969,7 +969,8 @@ public class GraphIndex {
             List<ServiceCalendarDate> serviceCalendarDates = graph.getCalendarService().getServiceCalendarDatesForServiceId(tripTimes.trip.getServiceId())
                     .stream().filter(serviceCalendarDate -> serviceCalendarDate.getDate().getAsDate().before(validTill)).collect(toList());
             TripTimesByWeekdaysParts tripTimesByWeekdaysParts = new TripTimesByWeekdaysParts(
-                    weekdaysGroup, tripTimes.getDepartureTime(0), serviceCalendarDates, "" + tripTimes.getNumStops(), tripTimes.trip.getServiceId());
+                    weekdaysGroup, tripTimes.getDepartureTime(0), serviceCalendarDates, "" + tripTimes.getNumStops(), tripTimes.trip.getServiceId(),
+                    graph.getCalendarService().getServiceStartDateForServiceId(tripTimes.trip.getServiceId()), graph.getCalendarService().getServiceEndDateForServiceId(tripTimes.trip.getServiceId()));
             int sidx = 0;
             for (Stop stop : tripPattern.stopPattern.stops) {
                 if (omitNonPickups && tripPattern.stopPattern.pickups[sidx] == tripPattern.stopPattern.PICKDROP_NONE)
