@@ -57,7 +57,7 @@ public class TripTimesByWeekdaysParts {
                 if (tripTimeByStopName.tripTimeShort.scheduledDeparture != tripTimes.getScheduledDepartureTime(0) || !this.identifier.equals(identifier) || !tripTimeByStopName.stopName.equals(stops[0].getName())) {
                     return false;
                 } else {
-                    for (int i = 1; i < tripTimes.getNumStops(); i++) {
+                    for (int i = 1; i < tripTimesByWeekdays.tripTimeByStopNameList.size() && i < stops.length; i++) {
                         tripTimeByStopName = tripTimesByWeekdays.tripTimeByStopNameList.get(i);
                         if (!tripTimeByStopName.stopName.equals(stops[i].getName()) || tripTimeByStopName.tripTimeShort.scheduledDeparture != tripTimes.getScheduledDepartureTime(i)) {
                             return false;
